@@ -1,0 +1,5 @@
+{
+  "name": "10xMailMatch",
+  "description": "An intelligent lead enrichment tool that uses Gemini to map Excel data and GetProspect to find business email addresses.",
+  "requestFramePermissions": []
+}
