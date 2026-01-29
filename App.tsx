@@ -132,6 +132,7 @@ const App: React.FC = () => {
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [showApiResultModal, setShowApiResultModal] = useState(false);
   const [apiResponseData, setApiResponseData] = useState<any>(null);
+  const [currentHistoryId, setCurrentHistoryId] = useState<string | null>(null);
 
   // App Mode & Input Mode
   const [appMode, setAppMode] = useState<'enrich' | 'verify' | 'linkedin'>('enrich');
@@ -311,7 +312,10 @@ const App: React.FC = () => {
           const { error } = await supabase.from('linkedin_results').insert(linkedinRows);
           if (error) console.error("Failed to save linkedin results", error);
         }
+        setCurrentHistoryId(historyData.id);
+        return historyData.id;
       }
+      return null;
     } catch (err) {
       console.error("Failed to save history to Supabase", err);
     }
@@ -608,7 +612,7 @@ const App: React.FC = () => {
     try {
       if (appMode === 'enrich') {
         if (!singleName || !singleCompany) {
-          setError("Name and Company are required.");
+          setError("Name and Company/Domain are required.");
           setIsProcessing(false);
           return;
         }
@@ -620,7 +624,7 @@ const App: React.FC = () => {
         });
       } else if (appMode === 'linkedin') {
         if (!singleName || !singleCompany) {
-          setError("Name and Company are required.");
+          setError("Name and Company/Domain are required.");
           setIsProcessing(false);
           return;
         }
@@ -886,7 +890,7 @@ const App: React.FC = () => {
     }));
 
     try {
-      const response = await fetch('https://88e72dcdae07.ngrok-free.app/enrich', {
+      const response = await fetch('https://83434661b5da.ngrok-free.app/enrich', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -912,8 +916,38 @@ const App: React.FC = () => {
 
       try {
         const jsonData = await responseClone.json();
-        setApiResponseData(processApiData(jsonData));
+        const processedData = processApiData(jsonData);
+        setApiResponseData(processedData);
         setShowApiResultModal(true);
+
+        // Save to Supabase api_sync_results (individual rows)
+        if (session?.user?.id) {
+          const items = Array.isArray(processedData) ? processedData : [processedData];
+          const rowsToInsert = items.map(item => ({
+            user_id: session.user.id,
+            history_id: currentHistoryId,
+            feature: appMode,
+            name: item["Name"],
+            company: item["Company"],
+            status: item["Status"],
+            email_used: item["email_used"],
+            mx_present: item["mx_present"],
+            explanation: item["explanation"],
+            linkedin_url: item["LinkedIn URL"],
+            risk_signals: item["risk_signals"],
+            syntax_valid: item["syntax_valid"],
+            prospect_name: item["Prospect Name"],
+            enriched_email: item["Enriched Email"],
+            recommendation: item["recommendation"],
+            local_part_risk: item["local_part_risk"],
+            prospect_company: item["Prospect Company"],
+            final_confidence: item["final_confidence"],
+            disposable_domain: item["disposable_domain"],
+            possible_typo_domain: item["possible_typo_domain"]
+          }));
+
+          await supabase.from('api_sync_results').insert(rowsToInsert);
+        }
       } catch (err) {
         console.error("Failed to parse API response for display", err);
       }
@@ -936,7 +970,7 @@ const App: React.FC = () => {
     }];
 
     try {
-      const response = await fetch('https://88e72dcdae07.ngrok-free.app/enrich', {
+      const response = await fetch('https://83434661b5da.ngrok-free.app/enrich', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -961,8 +995,38 @@ const App: React.FC = () => {
 
       try {
         const jsonData = await responseClone.json();
-        setApiResponseData(processApiData(jsonData));
+        const processedData = processApiData(jsonData);
+        setApiResponseData(processedData);
         setShowApiResultModal(true);
+
+        // Save to Supabase api_sync_results (individual rows)
+        if (session?.user?.id) {
+          const items = Array.isArray(processedData) ? processedData : [processedData];
+          const rowsToInsert = items.map(item => ({
+            user_id: session.user.id,
+            history_id: currentHistoryId,
+            feature: appMode,
+            name: item["Name"],
+            company: item["Company"],
+            status: item["Status"],
+            email_used: item["email_used"],
+            mx_present: item["mx_present"],
+            explanation: item["explanation"],
+            linkedin_url: item["LinkedIn URL"],
+            risk_signals: item["risk_signals"],
+            syntax_valid: item["syntax_valid"],
+            prospect_name: item["Prospect Name"],
+            enriched_email: item["Enriched Email"],
+            recommendation: item["recommendation"],
+            local_part_risk: item["local_part_risk"],
+            prospect_company: item["Prospect Company"],
+            final_confidence: item["final_confidence"],
+            disposable_domain: item["disposable_domain"],
+            possible_typo_domain: item["possible_typo_domain"]
+          }));
+
+          await supabase.from('api_sync_results').insert(rowsToInsert);
+        }
       } catch (err) {
         console.error("Failed to parse API response for display", err);
       }
@@ -975,18 +1039,18 @@ const App: React.FC = () => {
   const copyToClipboard = (text: string) => navigator.clipboard.writeText(text);
 
   const themeClasses = {
-    bg: theme === 'dark' ? 'bg-[#0f0720]' : 'bg-[#f5f0e1]',
-    text: theme === 'dark' ? 'text-violet-100' : 'text-slate-800',
-    glass: theme === 'dark' ? 'glass-dark' : 'glass-light',
-    header: theme === 'dark' ? 'glass-dark border-violet-800/30' : 'glass-light border-amber-200 shadow-sm',
-    card: theme === 'dark' ? 'glass-dark' : 'glass-light shadow-md',
-    input: theme === 'dark' ? 'bg-violet-950/40 border-violet-800/50 text-white' : 'bg-white/70 border-amber-100 text-slate-900',
-    label: theme === 'dark' ? 'text-violet-400' : 'text-slate-500',
-    sidebarText: theme === 'dark' ? 'text-violet-200' : 'text-slate-600',
-    tableHeader: theme === 'dark' ? 'bg-[#150b2e]' : 'bg-[#ebe8d5]',
-    tableRow: theme === 'dark' ? 'hover:bg-violet-900/40' : 'hover:bg-amber-100/40',
-    tableCell: theme === 'dark' ? 'bg-violet-900/20' : 'bg-white/60',
-    statusPending: theme === 'dark' ? 'text-violet-400/30' : 'text-slate-300'
+    bg: theme === 'dark' ? 'bg-[#0f0720]' : 'bg-[#f8fafc]',
+    text: theme === 'dark' ? 'text-violet-100' : 'text-slate-900',
+    glass: theme === 'dark' ? 'glass-dark' : 'bg-white/80 backdrop-blur-xl border border-white/20',
+    header: theme === 'dark' ? 'glass-dark border-violet-800/30' : 'bg-white/90 border-slate-200 shadow-sm backdrop-blur-md',
+    card: theme === 'dark' ? 'glass-dark' : 'bg-white border border-slate-100 shadow-lg',
+    input: theme === 'dark' ? 'bg-violet-950/40 border-violet-800/50 text-white' : 'bg-slate-50 border-slate-200 text-slate-900',
+    label: theme === 'dark' ? 'text-violet-400' : 'text-slate-600',
+    sidebarText: theme === 'dark' ? 'text-violet-200' : 'text-slate-700',
+    tableHeader: theme === 'dark' ? 'bg-[#150b2e]' : 'bg-slate-50 border-b border-slate-100',
+    tableRow: theme === 'dark' ? 'hover:bg-violet-900/40' : 'hover:bg-blue-50/50',
+    tableCell: theme === 'dark' ? 'bg-violet-900/20' : 'bg-white',
+    statusPending: theme === 'dark' ? 'text-violet-400/30' : 'text-slate-400'
   };
 
   const handleTabSwitch = (mode: 'enrich' | 'verify' | 'linkedin') => {
@@ -1150,14 +1214,14 @@ const App: React.FC = () => {
                 <p className={`${theme === 'dark' ? 'text-violet-300/60' : 'text-slate-500'} text-sm mt-1`}>Data returned from the endpoint.</p>
               </div>
 
-              <div className="flex-1 overflow-auto custom-scrollbar border rounded-2xl p-4 bg-black/5 dark:bg-white/5">
+              <div className={`flex-1 overflow-auto custom-scrollbar border rounded-2xl p-4 ${theme === 'dark' ? 'bg-black/5 border-white/10' : 'bg-white border-slate-200 shadow-inner'}`}>
                 {Array.isArray(apiResponseData) ? (
                   apiResponseData.length === 0 ? <p className="text-center opacity-50">Empty List</p> : (
                     <table className="w-full text-left border-collapse text-sm">
                       <thead>
                         <tr>
                           {Object.keys(apiResponseData[0] || {}).map(k => (
-                            <th key={k} className={`p-3 border-b ${theme === 'dark' ? 'border-white/10 text-violet-300' : 'border-black/10 text-slate-600'} font-bold`}>{k}</th>
+                            <th key={k} className={`p-4 border-b ${theme === 'dark' ? 'border-white/10 text-violet-300' : 'border-slate-100 text-slate-900'} font-bold text-xs uppercase tracking-wider bg-slate-50/50`}>{k}</th>
                           ))}
                         </tr>
                       </thead>
@@ -1165,7 +1229,7 @@ const App: React.FC = () => {
                         {apiResponseData.map((row: any, i: number) => (
                           <tr key={i} className={`group ${theme === 'dark' ? 'hover:bg-white/5' : 'hover:bg-black/5'} transition-colors`}>
                             {Object.keys(apiResponseData[0] || {}).map(k => (
-                              <td key={`${i}-${k}`} className={`p-3 border-b ${theme === 'dark' ? 'border-white/10 text-violet-100' : 'border-black/10 text-slate-800'}`}>
+                              <td key={`${i}-${k}`} className={`p-4 border-b ${theme === 'dark' ? 'border-white/10 text-violet-100' : 'border-slate-50 text-slate-800'}`}>
                                 {typeof row[k] === 'object' ? JSON.stringify(row[k]) : String(row[k])}
                               </td>
                             ))}
@@ -1178,8 +1242,8 @@ const App: React.FC = () => {
                   <table className="w-full text-left border-collapse text-sm">
                     <thead>
                       <tr>
-                        <th className={`p-3 border-b ${theme === 'dark' ? 'border-white/10 text-violet-300' : 'border-black/10 text-slate-600'} font-bold`}>Key</th>
-                        <th className={`p-3 border-b ${theme === 'dark' ? 'border-white/10 text-violet-300' : 'border-black/10 text-slate-600'} font-bold`}>Value</th>
+                        <th className={`p-4 border-b ${theme === 'dark' ? 'border-white/10 text-violet-300' : 'border-slate-100 text-slate-900'} font-bold text-xs uppercase tracking-wider bg-slate-50/50`}>Key</th>
+                        <th className={`p-4 border-b ${theme === 'dark' ? 'border-white/10 text-violet-300' : 'border-slate-100 text-slate-900'} font-bold text-xs uppercase tracking-wider bg-slate-50/50`}>Value</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1258,17 +1322,17 @@ const App: React.FC = () => {
               <div className={`${themeClasses.card} p-5 rounded-3xl overflow-hidden flex flex-col h-[calc(100vh-18rem)] min-h-[550px]`}>
                 <div className="flex items-center gap-2 mb-4">
                   <HistoryIcon className="w-4 h-4 text-violet-500" />
-                  <h3 className={`text-xs font-black uppercase tracking-widest ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Recent activity</h3>
+                  <h3 className={`text-sm font-black uppercase tracking-widest ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Recent activity</h3>
                 </div>
                 <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1 mb-4">
                   {history[appMode].map(entry => (
                     <div key={entry.id} onClick={() => loadHistorySession(entry)} className={`p-3 rounded-xl border ${theme === 'dark' ? 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-violet-500/50' : 'bg-black/5 border-black/10 hover:bg-black/10 hover:border-violet-500/50'} transition-all cursor-pointer group/item active:scale-95`}>
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-[9px] font-bold opacity-40 uppercase tracking-tighter">{entry.type}</span>
-                        <div className="flex items-center gap-1 opacity-40"><Clock className="w-2.5 h-2.5" /><span className="text-[9px]">{new Date(entry.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></div>
+                        <span className="text-[10px] font-bold opacity-40 uppercase tracking-tighter">{entry.type}</span>
+                        <div className="flex items-center gap-1 opacity-40"><Clock className="w-3 h-3" /><span className="text-[10px]">{new Date(entry.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></div>
                       </div>
-                      <p className={`text-[11px] font-bold ${theme === 'dark' ? 'text-violet-100 group-hover/item:text-violet-400' : 'text-slate-700 group-hover/item:text-violet-600'} truncate mb-1`}>{entry.input}</p>
-                      <p className={`text-[10px] font-mono ${entry.status.toLowerCase().includes('fail') ? 'text-rose-500' : 'text-emerald-500'} truncate`}>{entry.result}</p>
+                      <p className={`text-[13px] font-bold ${theme === 'dark' ? 'text-violet-100 group-hover/item:text-violet-400' : 'text-slate-700 group-hover/item:text-violet-600'} truncate mb-1`}>{entry.input}</p>
+                      <p className={`text-[11px] font-mono ${entry.status.toLowerCase().includes('fail') ? 'text-rose-500' : 'text-emerald-500'} truncate`}>{entry.result}</p>
                     </div>
                   ))}
                   {history[appMode].length === 0 && <div className="text-center py-10 opacity-30"><HistoryIcon className="w-8 h-8 mx-auto mb-2 opacity-10" /><p className="text-[10px] uppercase font-bold tracking-widest">No history yet</p></div>}
@@ -1278,9 +1342,9 @@ const App: React.FC = () => {
                 <div className={`mt-auto p-4 rounded-2xl border ${theme === 'dark' ? 'bg-violet-900/20 border-violet-800/30' : 'bg-violet-50 border-violet-200'} shrink-0`}>
                   <div className="flex items-center gap-2 mb-2">
                     <Info className="w-3.5 h-3.5 text-violet-500" />
-                    <span className={`text-[10px] font-black uppercase tracking-widest ${theme === 'dark' ? 'text-violet-300' : 'text-violet-700'}`}>Pro Insight</span>
+                    <span className={`text-[11px] font-black uppercase tracking-widest ${theme === 'dark' ? 'text-violet-300' : 'text-violet-700'}`}>Pro Insight</span>
                   </div>
-                  <p className={`text-[10px] leading-relaxed ${theme === 'dark' ? 'text-violet-400/80' : 'text-slate-600'}`}>
+                  <p className={`text-[11px] leading-relaxed ${theme === 'dark' ? 'text-violet-400/80' : 'text-slate-600'}`}>
                     10xMailMatch is your ultimate intelligence layer for lead generation. Powered by Gemini & GetProspect, we seamlessly enrich outreach with verified business emails and LinkedIn profiles.
                   </p>
                 </div>
@@ -1303,15 +1367,66 @@ const App: React.FC = () => {
                   </motion.div>
                 ) : (
                   <motion.div key="single" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className={`w-full max-w-2xl ${themeClasses.card} p-8 rounded-[2rem] border border-violet-800/10 shadow-xl overflow-hidden`}>
-                    <div className="flex flex-col items-center text-center mb-6"><div className="bg-violet-600/10 p-2.5 rounded-xl mb-2"><Zap className="w-6 h-6 text-violet-600" /></div><h3 className={`text-2xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Individual {appMode === 'verify' ? 'Check' : 'Search'}</h3></div>
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="w-10" /> {/* Spacer */}
+                      <div className="flex flex-col items-center text-center">
+                        <div className="bg-violet-600/10 p-2.5 rounded-xl mb-2"><Zap className="w-6 h-6 text-violet-600" /></div>
+                        <h3 className={`text-2xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Individual {appMode === 'verify' ? 'Check' : 'Search'}</h3>
+                      </div>
+                      <button
+                        onClick={() => { setSingleName(''); setSingleCompany(''); setSingleEmail(''); setSingleResult(null); }}
+                        className={`text-[10px] font-bold uppercase tracking-widest px-3 py-2 rounded-lg transition-all ${theme === 'dark' ? 'text-rose-400 hover:bg-rose-500/10' : 'text-rose-600 hover:bg-rose-50'}`}
+                      >
+                        Clear All
+                      </button>
+                    </div>
                     <div className="space-y-4">
                       {appMode === 'enrich' || appMode === 'linkedin' ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-1.5"><label className={`block text-[11px] font-bold ${themeClasses.label} uppercase tracking-widest ml-1`}>Name</label><div className="relative"><div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><User className={`h-5 w-5 ${theme === 'dark' ? 'text-violet-400/50' : 'text-slate-400'}`} /></div><input type="text" className={`w-full pl-10 pr-4 py-3.5 ${themeClasses.input} rounded-xl outline-none focus:ring-2 focus:ring-violet-600 transition-all text-sm`} value={singleName} onChange={(e) => setSingleName(e.target.value)} /></div></div>
-                          <div className="space-y-1.5"><label className={`block text-[11px] font-bold ${themeClasses.label} uppercase tracking-widest ml-1`}>Company</label><div className="relative"><div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Building2 className={`h-5 w-5 ${theme === 'dark' ? 'text-violet-400/50' : 'text-slate-400'}`} /></div><input type="text" className={`w-full pl-10 pr-4 py-3.5 ${themeClasses.input} rounded-xl outline-none focus:ring-2 focus:ring-violet-600 transition-all text-sm`} value={singleCompany} onChange={(e) => setSingleCompany(e.target.value)} /></div></div>
+                          <div className="space-y-1.5">
+                            <label className={`block text-[11px] font-bold ${themeClasses.label} uppercase tracking-widest ml-1`}>Name</label>
+                            <div className="relative">
+                              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <User className={`h-5 w-5 ${theme === 'dark' ? 'text-violet-400/50' : 'text-slate-400'}`} />
+                              </div>
+                              <input type="text" className={`w-full pl-10 pr-10 py-3.5 ${themeClasses.input} rounded-xl outline-none focus:ring-2 focus:ring-violet-600 transition-all text-sm`} value={singleName} onChange={(e) => setSingleName(e.target.value)} />
+                              {singleName && (
+                                <button onClick={() => setSingleName('')} className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-rose-500 transition-colors">
+                                  <X className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className={`block text-[11px] font-bold ${themeClasses.label} uppercase tracking-widest ml-1`}>Company/Domain</label>
+                            <div className="relative">
+                              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <Building2 className={`h-5 w-5 ${theme === 'dark' ? 'text-violet-400/50' : 'text-slate-400'}`} />
+                              </div>
+                              <input type="text" className={`w-full pl-10 pr-10 py-3.5 ${themeClasses.input} rounded-xl outline-none focus:ring-2 focus:ring-violet-600 transition-all text-sm`} value={singleCompany} onChange={(e) => setSingleCompany(e.target.value)} />
+                              {singleCompany && (
+                                <button onClick={() => setSingleCompany('')} className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-rose-500 transition-colors">
+                                  <X className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       ) : (
-                        <div className="space-y-1.5"><label className={`block text-[11px] font-bold ${themeClasses.label} uppercase tracking-widest ml-1`}>Email</label><div className="relative"><div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Mail className={`h-5 w-5 ${theme === 'dark' ? 'text-violet-400/50' : 'text-slate-400'}`} /></div><input type="email" className={`w-full pl-10 pr-4 py-3.5 ${themeClasses.input} rounded-xl outline-none focus:ring-2 focus:ring-violet-600 transition-all text-sm`} value={singleEmail} onChange={(e) => setSingleEmail(e.target.value)} /></div></div>
+                        <div className="space-y-1.5">
+                          <label className={`block text-[11px] font-bold ${themeClasses.label} uppercase tracking-widest ml-1`}>Email</label>
+                          <div className="relative">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                              <Mail className={`h-5 w-5 ${theme === 'dark' ? 'text-violet-400/50' : 'text-slate-400'}`} />
+                            </div>
+                            <input type="email" className={`w-full pl-10 pr-10 py-3.5 ${themeClasses.input} rounded-xl outline-none focus:ring-2 focus:ring-violet-600 transition-all text-sm`} value={singleEmail} onChange={(e) => setSingleEmail(e.target.value)} />
+                            {singleEmail && (
+                              <button onClick={() => setSingleEmail('')} className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-rose-500 transition-colors">
+                                <X className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
                       )}
                       <button onClick={handleSingleAction} disabled={isProcessing} className="w-full py-4 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white font-bold rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 text-base">{isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : (appMode === 'enrich' ? 'Find Email' : appMode === 'linkedin' ? 'Find LinkedIn' : 'Verify Email')}</button>
                       {singleResult && (
@@ -1320,7 +1435,7 @@ const App: React.FC = () => {
                             {singleResult.email && <div className="flex flex-col items-center w-full"><span className={`text-[9px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1`}>Email Found</span><div className="flex items-center gap-2 w-full justify-center"><span className={`text-sm font-mono font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'} px-3 py-1.5 bg-violet-600/10 rounded-lg break-all`}>{singleResult.email}</span><button onClick={() => copyToClipboard(singleResult.email!)} className="p-1.5 hover:bg-violet-600/10 rounded-md text-violet-600"><Copy className="w-4 h-4" /></button></div></div>}
                             {singleResult.linkedinUrl && <div className="flex flex-col items-center w-full"><span className={`text-[9px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1`}>LinkedIn Profile</span><div className="flex items-center gap-2 w-full justify-center"><a href={singleResult.linkedinUrl} target="_blank" rel="noreferrer" className={`text-sm font-mono font-bold text-blue-500 hover:underline px-3 py-1.5 bg-blue-500/10 rounded-lg flex items-center gap-1.5 break-all`}>View Profile <ExternalLink className="w-3.5 h-3.5" /></a><button onClick={() => copyToClipboard(singleResult.linkedinUrl!)} className="p-1.5 hover:bg-blue-600/10 rounded-md text-blue-500"><Copy className="w-4 h-4" /></button></div></div>}
                           </div>
-                          <div className="mt-2 flex flex-col items-center"><span className={`text-[9px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1`}>Status</span><div className={`inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-[0.1em] px-4 py-1 rounded-full border shadow-sm ${singleResult.status === 'completed' || singleResult.status === 'deliverable' || singleResult.status === 'found' ? 'text-emerald-700 bg-emerald-100 border-emerald-200' : 'text-rose-700 bg-rose-100 border-rose-200'}`}>{singleResult.status || 'FAILED'}</div></div>
+                          <div className="mt-2 flex flex-col items-center"><span className={`text-[9px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1`}>Status</span><div className={`inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-[0.1em] px-4 py-1 rounded-full border shadow-sm ${singleResult.status === 'completed' || singleResult.status === 'deliverable' || singleResult.status === 'found' ? 'text-green-700 bg-green-100 border-green-200' : singleResult.status === 'undeliverable' || singleResult.status === 'failed' ? 'text-rose-700 bg-rose-100 border-rose-200' : 'text-amber-700 bg-amber-100 border-amber-200'}`}>{singleResult.status === 'deliverable' ? 'VALID' : (singleResult.status === 'undeliverable' ? 'INVALID' : (singleResult.status || 'FAILED'))}</div></div>
 
                           {appMode === 'enrich' && (
                             <button
@@ -1389,7 +1504,7 @@ const App: React.FC = () => {
                           )}
                           <td className={`px-6 py-3 last:rounded-r-2xl ${themeClasses.tableCell} transition-colors`}>
                             <div className="flex items-center gap-2">
-                              <div className={`inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em] px-4 py-1.5 rounded-full border shadow-sm transition-all duration-300 ${row.status === 'processing' || row.status === 'searching' ? 'text-violet-600 bg-violet-100 border-violet-200 animate-pulse' : row.status === 'completed' || row.status === 'deliverable' || row.status === 'found' ? 'text-emerald-700 bg-emerald-100 border-emerald-200' : row.status === 'not_found' || row.status === 'risky' ? 'text-amber-700 bg-amber-100 border-amber-200' : row.status === 'failed' || row.status === 'undeliverable' ? 'text-rose-700 bg-rose-100 border-rose-200' : row.status === 'unknown' ? 'text-slate-600 bg-slate-100 border-slate-200' : themeClasses.statusPending}`}>{(row.status === 'processing' || row.status === 'searching') && <Loader2 className="w-3 h-3 animate-spin" />}{row.status === 'deliverable' ? 'VALID' : row.status}</div>
+                              <div className={`inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em] px-4 py-1.5 rounded-full border shadow-sm transition-all duration-300 ${row.status === 'processing' || row.status === 'searching' ? 'text-violet-600 bg-violet-100 border-violet-200 animate-pulse' : row.status === 'completed' || row.status === 'deliverable' || row.status === 'found' ? 'text-green-700 bg-green-100 border-green-200' : row.status === 'not_found' || row.status === 'risky' ? 'text-amber-700 bg-amber-100 border-amber-200' : row.status === 'failed' || row.status === 'undeliverable' ? 'text-rose-700 bg-rose-100 border-rose-200' : row.status === 'unknown' ? 'text-slate-600 bg-slate-100 border-slate-200' : themeClasses.statusPending}`}>{(row.status === 'processing' || row.status === 'searching') && <Loader2 className="w-3 h-3 animate-spin" />}{row.status === 'deliverable' ? 'VALID' : (row.status === 'undeliverable' ? 'INVALID' : row.status)}</div>
                             </div>
                           </td>
                         </tr>
