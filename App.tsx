@@ -732,7 +732,6 @@ const App: React.FC = () => {
     if (!session?.user?.id) return null;
 
     try {
-      const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
       let query: any;
       if (mode === 'enrich') {
         query = supabase.from('prospect_results')
@@ -740,9 +739,8 @@ const App: React.FC = () => {
           .eq('user_id', session.user.id)
           .ilike('name', input1.trim())
           .ilike('company', input2?.trim() || '')
-          .gte('created_at', fourHoursAgo)
-          .order('created_at', { ascending: true })
-          .limit(10);
+          .order('created_at', { ascending: true }) // Order by oldest first
+          .limit(50);
 
         console.log(`Checking cache for: ${input1}, ${input2}`, { mode });
       } else if (mode === 'verify') {
@@ -750,18 +748,16 @@ const App: React.FC = () => {
           .select('*')
           .eq('user_id', session.user.id)
           .ilike('email', input1.trim())
-          .gte('created_at', fourHoursAgo)
           .order('created_at', { ascending: true })
-          .limit(10);
+          .limit(50);
       } else if (mode === 'linkedin') {
         query = supabase.from('linkedin_results')
           .select('*')
           .eq('user_id', session.user.id)
           .ilike('name', input1.trim())
           .ilike('company', input2?.trim() || '')
-          .gte('created_at', fourHoursAgo)
           .order('created_at', { ascending: true })
-          .limit(10);
+          .limit(50);
       }
 
       if (!query) return null;
