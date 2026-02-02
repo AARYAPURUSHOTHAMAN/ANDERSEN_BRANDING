@@ -47,12 +47,7 @@ import { suggestMappings, findLinkedInUrl } from './services/geminiService';
 const SUPABASE_URL = (import.meta as any).env?.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://jftnwoojuofxzufmrogx.supabase.co';
 const SUPABASE_ANON_KEY = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpmdG53b29qdW9meHp1Zm1yb2d4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg5MzE3NDAsImV4cCI6MjA4NDUwNzc0MH0.NI_ZasN_JiVAg_4uKiwm4HKUgdZ9qVKwYSjcVySaJLs';
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: {
-    persistSession: true, // Changed to true to match default, but making explicit
-    autoRefreshToken: true,
-  }
-});
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /**
  * Utility for Tailwind class merging
@@ -154,11 +149,6 @@ const App: React.FC = () => {
 
   // App Logic State
   const [file, setFile] = useState<File | null>(null);
-
-  // Debugging Render State
-  useEffect(() => {
-    console.log("App Render State - session:", session ? "Present" : "Null", "isInitialAuthCheck:", isInitialAuthCheck);
-  }, [session, isInitialAuthCheck]);
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<ProspectRow[]>([]);
   const [mapping, setMapping] = useState<MappingConfig | null>(null);
@@ -179,7 +169,6 @@ const App: React.FC = () => {
   useEffect(() => {
     // Check initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log("Initial auth check:", session ? "Session restored" : "No session found");
       setSession(session);
       setIsInitialAuthCheck(false);
     }).catch(err => {
@@ -188,7 +177,6 @@ const App: React.FC = () => {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      console.log(`Auth state changed: ${_event}`, session ? "Session active" : "No session");
       setSession(session);
     });
 
