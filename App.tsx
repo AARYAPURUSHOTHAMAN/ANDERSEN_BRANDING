@@ -44,10 +44,15 @@ import { findEmail, verifyEmail } from './services/getProspect';
 import { suggestMappings, findLinkedInUrl } from './services/geminiService';
 
 // Initialize Supabase client with safety fallbacks to prevent "supabaseUrl is required" error
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://jftnwoojuofxzufmrogx.supabase.co';
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpmdG53b29qdW9meHp1Zm1yb2d4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg5MzE3NDAsImV4cCI6MjA4NDUwNzc0MH0.NI_ZasN_JiVAg_4uKiwm4HKUgdZ9qVKwYSjcVySaJLs';
+const SUPABASE_URL = (import.meta as any).env?.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://jftnwoojuofxzufmrogx.supabase.co';
+const SUPABASE_ANON_KEY = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpmdG53b29qdW9meHp1Zm1yb2d4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg5MzE3NDAsImV4cCI6MjA4NDUwNzc0MH0.NI_ZasN_JiVAg_4uKiwm4HKUgdZ9qVKwYSjcVySaJLs';
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: true, // Changed to true to match default, but making explicit
+    autoRefreshToken: true,
+  }
+});
 
 /**
  * Utility for Tailwind class merging
@@ -123,6 +128,7 @@ const App: React.FC = () => {
   // Supabase Auth Session
   const [session, setSession] = useState<any>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(false);
+  const [isInitialAuthCheck, setIsInitialAuthCheck] = useState(true);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [authEmail, setAuthEmail] = useState('');
   const [authPass, setAuthPass] = useState('');
@@ -133,6 +139,7 @@ const App: React.FC = () => {
   const [showApiResultModal, setShowApiResultModal] = useState(false);
   const [apiResponseData, setApiResponseData] = useState<any>(null);
   const [currentHistoryId, setCurrentHistoryId] = useState<string | null>(null);
+  const [isHistoryView, setIsHistoryView] = useState(false);
 
   // App Mode & Input Mode
   const [appMode, setAppMode] = useState<'enrich' | 'verify' | 'linkedin'>('enrich');
@@ -147,6 +154,11 @@ const App: React.FC = () => {
 
   // App Logic State
   const [file, setFile] = useState<File | null>(null);
+
+  // Debugging Render State
+  useEffect(() => {
+    console.log("App Render State - session:", session ? "Present" : "Null", "isInitialAuthCheck:", isInitialAuthCheck);
+  }, [session, isInitialAuthCheck]);
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<ProspectRow[]>([]);
   const [mapping, setMapping] = useState<MappingConfig | null>(null);
@@ -161,15 +173,22 @@ const App: React.FC = () => {
   const [singleName, setSingleName] = useState('');
   const [singleCompany, setSingleCompany] = useState('');
   const [singleEmail, setSingleEmail] = useState('');
-  const [singleResult, setSingleResult] = useState<{ email?: string; linkedinUrl?: string; status?: string; message?: string } | null>(null);
+  const [singleResult, setSingleResult] = useState<{ email?: string; linkedinUrl?: string; status?: string; message?: string; rawData?: any; metadata?: any; cachedAt?: string; cachedType?: string } | null>(null);
 
   // Listen for auth state changes
   useEffect(() => {
+    // Check initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log("Initial auth check:", session ? "Session restored" : "No session found");
       setSession(session);
+      setIsInitialAuthCheck(false);
+    }).catch(err => {
+      console.error("Failed to get initial session:", err);
+      setIsInitialAuthCheck(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log(`Auth state changed: ${_event}`, session ? "Session active" : "No session");
       setSession(session);
     });
 
@@ -189,6 +208,14 @@ const App: React.FC = () => {
       if (error) throw error;
 
       if (data) {
+        // Fetch uniquely synced history IDs to ensure robust persistence
+        const { data: syncRecords } = await supabase
+          .from('api_sync_results')
+          .select('history_id')
+          .eq('user_id', userId);
+
+        const syncedIds = new Set(syncRecords?.map(r => r.history_id) || []);
+
         const newHistory = {
           enrich: [] as HistoryEntry[],
           verify: [] as HistoryEntry[],
@@ -206,8 +233,17 @@ const App: React.FC = () => {
             timestamp: row.timestamp || new Date(row.created_at).getTime(),
             data: row.data,
             headers: row.headers,
-            mapping: row.mapping
+            mapping: row.mapping,
+            hasCached: row.data?.[0]?.hasCached,
+            cachedAt: row.data?.[0]?.cachedAt,
+            // Cross-reference with api_sync_results table for truth
+            synced: syncedIds.has(row.id) || (Array.isArray(row.data) ? row.data[0]?.synced : row.data?.synced),
+            cachedType: Array.isArray(row.data) ? row.data[0]?.cachedType : row.data?.cachedType
           };
+
+          if (row.data?.[0]?.synced) {
+            console.log(`Found synced entry in history: ${row.id}`, row.data[0]);
+          }
 
           // Primary categorization based on stored 'feature' column
           if (row.feature === 'verify') {
@@ -247,12 +283,54 @@ const App: React.FC = () => {
     }
   }, [session]);
 
+  const formatHistoryInput = (entry: HistoryEntry) => {
+    if (entry.type === 'bulk') return entry.input;
+
+    // For single: "Name @ Company" -> show full Name, hide @ Company
+    if (entry.input.includes(' @ ')) {
+      return entry.input.split(' @ ')[0].trim();
+    }
+
+    // For email masking (Verify)
+    if (entry.input.includes('@') && !entry.input.includes(' ')) {
+      const parts = entry.input.split('@');
+      const local = parts[0];
+      const domain = parts[1];
+      if (local.length > 3) {
+        return `${local.substring(0, 2)}***@${domain}`;
+      }
+    }
+
+    return entry.input;
+  };
+
+  const formatHistoryResult = (result: string) => {
+    if (!result || typeof result !== 'string') return result;
+    // Mask emails
+    if (result.includes('@') && !result.includes(' ')) {
+      const parts = result.split('@');
+      const local = parts[0];
+      const domain = parts[1];
+      if (local.length > 2) {
+        return `${local.substring(0, 2)}**@${domain}`;
+      }
+    }
+    // Mask LinkedIn URLs loosely if needed, or just keep as is if user only asked for emails
+    return result;
+  };
+
   const saveToSupabase = async (entry: HistoryEntry, mode: string) => {
     if (!session?.user?.id) return;
 
     try {
-      // 1. Prepare minimal data for history table
-      const minimalData = [{ user_id: session.user.id }];
+      // 1. Prepare minimal data for history table, preserving cache info
+      const minimalData = [{
+        user_id: session.user.id,
+        hasCached: entry.hasCached,
+        cachedAt: entry.cachedAt,
+        cachedType: entry.cachedType,
+        synced: entry.synced
+      }];
 
       // 2. Insert into 'history' table with feature
       const { data: historyData, error: historyError } = await supabase.from('history').insert({
@@ -276,8 +354,8 @@ const App: React.FC = () => {
           const prospectRows = entry.data.map(item => ({
             history_id: historyData.id,
             user_id: session.user.id,
-            name: item.name || item.originalData?.[entry.mapping?.nameHeader || ''] || undefined,
-            company: item.company || item.originalData?.[entry.mapping?.companyHeader || ''] || undefined,
+            name: item.name ?? item.originalData?.[entry.mapping?.nameHeader || ''] ?? null,
+            company: item.company ?? item.originalData?.[entry.mapping?.companyHeader || ''] ?? null,
             email: item.email,
             status: item.status
           }));
@@ -443,6 +521,7 @@ const App: React.FC = () => {
     setRows([]);
     setHeaders([]);
     setMapping(null);
+    setIsHistoryView(false);
     setAuthEmail('');
     setAuthPass('');
     setAuthName('');
@@ -457,6 +536,7 @@ const App: React.FC = () => {
 
     setFile(uploadedFile);
     setError(null);
+    setIsHistoryView(false);
 
     const reader = new FileReader();
     reader.onload = async (event) => {
@@ -478,13 +558,19 @@ const App: React.FC = () => {
         setIsSuggesting(true);
         const suggested = await suggestMappings(fileHeaders);
 
+        // Helper to find exact case-sensitive header from suggested header
+        const getLiteralHeader = (suggested: string, headers: string[]) => {
+          if (!suggested) return '';
+          return headers.find(h => h.toLowerCase() === suggested.toLowerCase()) || suggested;
+        };
+
         // Correctly handle initial email mapping to prevent column mismatch
-        const detectedEmailHeader = fileHeaders.find(h => h.toLowerCase().includes('email'));
+        const detectedEmailHeader = fileHeaders.find(h => h.toLowerCase().includes('email')) || '';
 
         // In verify mode, we don't want to default name/company to the email column if they aren't clearly found
         const initialMapping: MappingConfig = {
-          nameHeader: (appMode === 'verify' && suggested.nameHeader === detectedEmailHeader) ? '' : suggested.nameHeader,
-          companyHeader: (appMode === 'verify' && suggested.companyHeader === detectedEmailHeader) ? '' : suggested.companyHeader,
+          nameHeader: (appMode === 'verify' && suggested.nameHeader === detectedEmailHeader) ? '' : getLiteralHeader(suggested.nameHeader, fileHeaders),
+          companyHeader: (appMode === 'verify' && suggested.companyHeader === detectedEmailHeader) ? '' : getLiteralHeader(suggested.companyHeader, fileHeaders),
           emailHeader: detectedEmailHeader
         };
         setMapping(initialMapping);
@@ -509,6 +595,7 @@ const App: React.FC = () => {
   const startProcessing = async () => {
     if (!mapping) return;
     setIsProcessing(true);
+    setIsHistoryView(false);
 
     let currentRowsState: ProspectRow[] = rows.map(row => ({
       ...row,
@@ -532,31 +619,62 @@ const App: React.FC = () => {
 
       let resultRowUpdate: Partial<ProspectRow> = {};
 
-      if (appMode === 'enrich') {
-        const result = await findEmail(row.name, row.company);
-        resultRowUpdate = {
-          email: result.email,
-          status: (result.success ? 'completed' : (result.message === 'No email found' ? 'not_found' : 'failed')) as any,
-          error: result.success ? undefined : result.message
-        };
-      } else if (appMode === 'linkedin') {
-        const result = await findLinkedInUrl(row.name, row.company);
-        resultRowUpdate = {
-          linkedinUrl: result.url,
-          status: (result.success ? 'found' : 'not_found') as any,
-          error: result.success ? undefined : result.message
-        };
-      } else if (appMode === 'verify') {
-        const emailToVerify = row.email;
-        if (!emailToVerify) {
-          resultRowUpdate = { status: 'failed', error: 'No email found' };
-        } else {
-          const result = await verifyEmail(emailToVerify);
+      // 1. Check Cache first
+      const existing = await checkExistingResult(appMode, (appMode === 'verify' ? row.email : row.name) || '', row.company);
+
+      if (existing) {
+        if (appMode === 'enrich') {
           resultRowUpdate = {
-            status: (result.success ? (result.status as any) : 'failed') as any,
-            error: result.success ? undefined : result.message,
-            metadata: result.rawData
+            email: existing.email,
+            status: existing.status as any,
+            metadata: { ...existing.result, cached: true },
+            cachedAt: existing.created_at,
+            cachedType: (existing as any).historyType
           };
+        } else if (appMode === 'linkedin') {
+          resultRowUpdate = {
+            linkedinUrl: existing.linkedin_url,
+            status: existing.status as any,
+            metadata: { cached: true },
+            cachedAt: existing.created_at,
+            cachedType: (existing as any).historyType
+          };
+        } else if (appMode === 'verify') {
+          resultRowUpdate = {
+            status: existing.status as any,
+            metadata: { ...existing.rawData, cached: true },
+            cachedAt: existing.created_at,
+            cachedType: (existing as any).historyType
+          };
+        }
+      } else {
+        // 2. Perform API Action if not in cache
+        if (appMode === 'enrich') {
+          const result = await findEmail(row.name, row.company);
+          resultRowUpdate = {
+            email: result.email,
+            status: (result.success ? 'completed' : (result.message === 'No email found' ? 'not_found' : 'failed')) as any,
+            error: result.success ? undefined : result.message
+          };
+        } else if (appMode === 'linkedin') {
+          const result = await findLinkedInUrl(row.name, row.company);
+          resultRowUpdate = {
+            linkedinUrl: result.url,
+            status: (result.success ? 'found' : 'not_found') as any,
+            error: result.success ? undefined : result.message
+          };
+        } else if (appMode === 'verify') {
+          const emailToVerify = row.email;
+          if (!emailToVerify) {
+            resultRowUpdate = { status: 'failed', error: 'No email found' };
+          } else {
+            const result = await verifyEmail(emailToVerify);
+            resultRowUpdate = {
+              status: (result.success ? (result.status as any) : 'failed') as any,
+              error: result.success ? undefined : result.message,
+              metadata: result.rawData
+            };
+          }
         }
       }
 
@@ -579,11 +697,18 @@ const App: React.FC = () => {
       timestamp: Date.now(),
       data: [...currentRowsState],
       headers: [...headers],
-      mapping: mapping ? { ...mapping } : undefined
+      mapping: mapping ? { ...mapping } : undefined,
+      hasCached: currentRowsState.some(r => r.metadata?.cached),
+      cachedAt: currentRowsState.find(r => r.cachedAt)?.cachedAt
     };
 
     // Save to Supabase
-    saveToSupabase(bulkEntry, appMode);
+    const supabaseId = await saveToSupabase(bulkEntry, appMode);
+
+    if (supabaseId) {
+      bulkEntry.id = supabaseId;
+    }
+    setCurrentHistoryId(bulkEntry.id);
 
     // Modified to prevent duplicates based on same input and very close timestamp
     setHistory(prev => {
@@ -603,13 +728,131 @@ const App: React.FC = () => {
     setIsProcessing(false);
   };
 
+  const checkExistingResult = async (mode: string, input1: string, input2?: string) => {
+    if (!session?.user?.id) return null;
+
+    try {
+      const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
+      let query: any;
+      if (mode === 'enrich') {
+        query = supabase.from('prospect_results')
+          .select('*')
+          .eq('user_id', session.user.id)
+          .ilike('name', input1.trim())
+          .ilike('company', input2?.trim() || '')
+          .gte('created_at', fourHoursAgo)
+          .order('created_at', { ascending: true })
+          .limit(10);
+
+        console.log(`Checking cache for: ${input1}, ${input2}`, { mode });
+      } else if (mode === 'verify') {
+        query = supabase.from('verification_results')
+          .select('*')
+          .eq('user_id', session.user.id)
+          .ilike('email', input1.trim())
+          .gte('created_at', fourHoursAgo)
+          .order('created_at', { ascending: true })
+          .limit(10);
+      } else if (mode === 'linkedin') {
+        query = supabase.from('linkedin_results')
+          .select('*')
+          .eq('user_id', session.user.id)
+          .ilike('name', input1.trim())
+          .ilike('company', input2?.trim() || '')
+          .gte('created_at', fourHoursAgo)
+          .order('created_at', { ascending: true })
+          .limit(10);
+      }
+
+      if (!query) return null;
+      const { data, error } = await query;
+      if (error) throw error;
+
+      const results = data || [];
+      // Success statuses that should be prioritized for preserving initial search source
+      const successStatuses = ['completed', 'found', 'deliverable', 'valid', 'risky', 'unknown', 'undeliverable', 'not_found'];
+
+      // Find the oldest successful result (ASC order means the first one is oldest)
+      let result = results.find(r => successStatuses.includes(r.status));
+
+      // Fallback to the latest record if no preferred results found
+      if (!result && results.length > 0) {
+        result = results[results.length - 1];
+      }
+
+      if (result && result.history_id) {
+        const { data: hData } = await supabase.from('history').select('type, data').eq('id', result.history_id).single();
+        if (hData) {
+          const cachedTypeFromData = Array.isArray(hData.data) ? hData.data[0]?.cachedType : hData.data?.cachedType;
+          (result as any).historyType = cachedTypeFromData || hData.type;
+        }
+      }
+      return result || null;
+    } catch (err) {
+      console.error("Cache lookup failed", err);
+      return null;
+    }
+  };
+
   const handleSingleAction = async () => {
     setIsProcessing(true);
     setSingleResult(null);
     setError(null);
+    setIsHistoryView(false);
 
     let resultPayload: any;
     try {
+      // 1. Check for existing local results (Cache)
+      const existing = await checkExistingResult(appMode, appMode === 'verify' ? singleEmail : singleName, singleCompany);
+
+      if (existing) {
+        setSingleResult({
+          email: existing.email,
+          linkedinUrl: existing.linkedin_url,
+          status: existing.status,
+          message: "Already Processed",
+          rawData: existing.result,
+          metadata: { cached: true },
+          cachedAt: existing.created_at,
+          cachedType: (existing as any).historyType
+        });
+
+        const cachedHistoryEntry: HistoryEntry = {
+          id: `single-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          type: 'single',
+          input: appMode === 'verify' ? singleEmail : `${singleName} @ ${singleCompany}`,
+          result: existing.email || existing.linkedin_url || existing.status || 'Success',
+          status: existing.status || 'completed',
+          timestamp: Date.now(),
+          data: [{
+            id: `single-row-${Date.now()}`,
+            name: singleName,
+            company: singleCompany,
+            email: existing.email,
+            linkedinUrl: existing.linkedin_url,
+            status: existing.status,
+            originalData: {},
+            metadata: { ...existing.result, cached: true } // Ensure metadata includes cached status
+          }],
+          hasCached: true,
+          cachedAt: existing.created_at,
+          cachedType: (existing as any).historyType
+        };
+
+        const supabaseId = await saveToSupabase(cachedHistoryEntry, appMode);
+        if (supabaseId) cachedHistoryEntry.id = supabaseId;
+        setCurrentHistoryId(cachedHistoryEntry.id);
+
+        setHistory(prev => {
+          const existingHistory = prev[appMode];
+          return { ...prev, [appMode]: [cachedHistoryEntry, ...existingHistory].slice(0, 15) };
+        });
+
+        setIsProcessing(false);
+        return;
+      }
+
+      // 2. Perform API Action if not found in cache
       if (appMode === 'enrich') {
         if (!singleName || !singleCompany) {
           setError("Name and Company/Domain are required.");
@@ -668,7 +911,12 @@ const App: React.FC = () => {
       };
 
       // Save to Supabase
-      saveToSupabase(newHistoryEntry, appMode);
+      const supabaseId = await saveToSupabase(newHistoryEntry, appMode);
+
+      if (supabaseId) {
+        newHistoryEntry.id = supabaseId;
+      }
+      setCurrentHistoryId(newHistoryEntry.id);
 
       setHistory(prev => {
         const existingHistory = prev[appMode];
@@ -689,6 +937,8 @@ const App: React.FC = () => {
   };
 
   const loadHistorySession = async (entry: HistoryEntry) => {
+    setCurrentHistoryId(entry.id);
+    setIsHistoryView(true);
     // Check for minimal data (stub with user_id)
     const dataAny = entry.data as any[];
     const isMinimal = dataAny && dataAny.length > 0 && !dataAny[0].name && dataAny[0].user_id;
@@ -726,7 +976,8 @@ const App: React.FC = () => {
               company: original.company || '',
               email: r.email,
               status: r.status as any,
-              originalData: original
+              originalData: original,
+              metadata: { ...original } // Don't force cached: true
             };
           });
         } else if (entry.feature === 'linkedin') {
@@ -736,7 +987,8 @@ const App: React.FC = () => {
             company: r.company || '',
             linkedinUrl: r.linkedin_url,
             status: r.status as any,
-            originalData: { ...r }
+            originalData: { ...r },
+            metadata: { ...r } // Don't force cached: true
           }));
         } else {
           reconstructedRows = results.map((p: any) => ({
@@ -745,7 +997,8 @@ const App: React.FC = () => {
             company: p.company || '',
             email: p.email,
             status: p.status as any,
-            originalData: { ...p }
+            originalData: { ...p },
+            metadata: { ...p } // Don't force cached: true
           }));
         }
 
@@ -784,12 +1037,15 @@ const App: React.FC = () => {
         if (record) {
           const mockResult: any = {
             status: record.status,
+            message: "Already Processed", // Add message for cached single result
+            rawData: { cached: true } // Add cached metadata
           };
 
           if (entry.feature === 'verify') {
             mockResult.email = record.email;
             if (record.result) {
               mockResult.message = record.result.message;
+              mockResult.rawData = { ...record.result, cached: true };
             }
           } else if (entry.feature === 'linkedin') {
             mockResult.linkedinUrl = record.linkedin_url;
@@ -801,7 +1057,7 @@ const App: React.FC = () => {
           setSingleResult(mockResult);
         }
       } else {
-        const mockResult: any = { status: entry.status };
+        const mockResult: any = { status: entry.status, message: "Already Processed" }; // Add message for cached single result
         if (appMode === 'enrich') mockResult.email = entry.result;
         else if (appMode === 'linkedin') mockResult.linkedinUrl = entry.result;
         setSingleResult(mockResult);
@@ -947,6 +1203,31 @@ const App: React.FC = () => {
           }));
 
           await supabase.from('api_sync_results').insert(rowsToInsert);
+
+          // Update local history synced status
+          setHistory(prev => ({
+            ...prev,
+            [appMode]: prev[appMode].map(e => {
+              if (e.id === currentHistoryId) {
+                const newData = e.data ? [...e.data] : [];
+                if (newData.length > 0) newData[0] = { ...newData[0], synced: true };
+                return { ...e, synced: true, data: newData };
+              }
+              return e;
+            })
+          }));
+
+          // Persist synced status by updating the 'data' JSONB column
+          // We can't rely on a 'synced' column existing, so we store it in the data blob
+          const { data: currentSyncData } = await supabase.from('history').select('data').eq('id', currentHistoryId).single();
+          if (currentSyncData && currentSyncData.data && currentSyncData.data.length > 0) {
+            const newData = [...currentSyncData.data];
+            newData[0] = { ...newData[0], synced: true };
+            const { error: updateError } = await supabase.from('history').update({ data: newData }).eq('id', currentHistoryId);
+            console.log(`Updated bulk sync status for ${currentHistoryId}`, { updateError, newData });
+          } else {
+            console.warn(`Could not update sync status: data array missing for ${currentHistoryId}`, currentSyncData);
+          }
         }
       } catch (err) {
         console.error("Failed to parse API response for display", err);
@@ -1026,6 +1307,30 @@ const App: React.FC = () => {
           }));
 
           await supabase.from('api_sync_results').insert(rowsToInsert);
+
+          // Update local history synced status
+          setHistory(prev => ({
+            ...prev,
+            [appMode]: prev[appMode].map(e => {
+              if (e.id === currentHistoryId) {
+                const newData = e.data ? [...e.data] : [];
+                if (newData.length > 0) newData[0] = { ...newData[0], synced: true };
+                return { ...e, synced: true, data: newData };
+              }
+              return e;
+            })
+          }));
+
+          // Persist synced status by updating the 'data' JSONB column
+          const { data: currentSyncData } = await supabase.from('history').select('data').eq('id', currentHistoryId).single();
+          if (currentSyncData && currentSyncData.data && currentSyncData.data.length > 0) {
+            const newData = [...currentSyncData.data];
+            newData[0] = { ...newData[0], synced: true };
+            const { error: updateError } = await supabase.from('history').update({ data: newData }).eq('id', currentHistoryId);
+            console.log(`Updated single sync status for ${currentHistoryId}`, { updateError, newData });
+          } else {
+            console.warn(`Could not update sync status: data array missing for ${currentHistoryId}`, currentSyncData);
+          }
         }
       } catch (err) {
         console.error("Failed to parse API response for display", err);
@@ -1033,6 +1338,43 @@ const App: React.FC = () => {
     } catch (err) {
       alert('Failed to sync single result to API.');
       console.error(err);
+    }
+  };
+
+  const handleGetApiResults = async () => {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!currentHistoryId || !uuidRegex.test(currentHistoryId)) {
+      alert("Invalid session ID or historical entry. Search for new results or click a synced entry from history.");
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const { data, error } = await supabase
+        .from('api_sync_results')
+        .select('*')
+        .eq('history_id', currentHistoryId);
+
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        alert("No API results found for this session.");
+        return;
+      }
+
+      // Filter out internal metadata columns for display
+      const filteredData = data.map(item => {
+        const { id, user_id, history_id, feature, created_at, ...rest } = item;
+        return rest;
+      });
+
+      setApiResponseData(filteredData);
+      setShowApiResultModal(true);
+    } catch (err) {
+      console.error("Failed to fetch API results:", err);
+      alert("Failed to fetch API results from history.");
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -1066,6 +1408,7 @@ const App: React.FC = () => {
       setSingleCompany('');
       setSingleEmail('');
       setError(null);
+      setIsHistoryView(false);
     }
   };
 
@@ -1081,6 +1424,24 @@ const App: React.FC = () => {
     setMapping({ nameHeader: 'Found Name', companyHeader: 'Found Company', emailHeader: 'Found Email' });
     setFile(new File([], "Enriched Emails List"));
   };
+
+  if (isInitialAuthCheck) {
+    return (
+      <div className={cn("min-h-screen w-full flex flex-col items-center justify-center p-4 transition-colors duration-500", theme === 'dark' ? "bg-slate-900" : "bg-[#f5f0e1]")}>
+        <BackgroundBoxes className="opacity-40" />
+        <div className="relative z-30 flex flex-col items-center">
+          <div className="bg-violet-600 p-4 rounded-3xl mb-6 shadow-2xl shadow-violet-600/40 animate-pulse">
+            <Mail className="w-10 h-10 text-white" />
+          </div>
+          <h1 className={`text-3xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'} tracking-tight mb-2 uppercase tracking-[0.2em]`}>10xMailMatch</h1>
+          <div className="flex items-center gap-2 mt-4">
+            <Loader2 className="w-4 h-4 animate-spin text-violet-600" />
+            <span className={`text-xs font-bold uppercase tracking-widest ${theme === 'dark' ? 'text-violet-400/60' : 'text-slate-500'}`}>Synchronizing workspace...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!session) {
     return (
@@ -1187,7 +1548,7 @@ const App: React.FC = () => {
                   <span className="text-[10px] opacity-40 uppercase font-black tracking-widest mt-1">.json format</span>
                 </button>
 
-                {appMode === 'enrich' && (
+                {!isHistoryView && appMode === 'enrich' && (
                   <button onClick={handleApiExport} className={`group flex flex-col items-center p-6 rounded-3xl border-2 transition-all duration-300 md:col-span-2 ${theme === 'dark' ? 'bg-white/5 border-violet-800/30 hover:border-blue-500/50 hover:bg-blue-500/5' : 'bg-white border-slate-200 hover:border-blue-500 hover:bg-blue-50'}`}>
                     <Webhook className="w-10 h-10 text-blue-500 mb-3 group-hover:scale-110 transition-transform" />
                     <span className={`font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-800'} text-sm`}>Sync to API</span>
@@ -1317,25 +1678,83 @@ const App: React.FC = () => {
       </header>
       <main className="flex-1 max-w-7xl mx-auto w-full px-6 py-2 animate-fade-in relative z-10">
         {!file ? (
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
-            <div className="lg:col-span-1 space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
+            <div className="lg:col-span-2 space-y-4">
               <div className={`${themeClasses.card} p-5 rounded-3xl overflow-hidden flex flex-col h-[calc(100vh-18rem)] min-h-[550px]`}>
                 <div className="flex items-center gap-2 mb-4">
                   <HistoryIcon className="w-4 h-4 text-violet-500" />
                   <h3 className={`text-sm font-black uppercase tracking-widest ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Recent activity</h3>
                 </div>
-                <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1 mb-4">
-                  {history[appMode].map(entry => (
-                    <div key={entry.id} onClick={() => loadHistorySession(entry)} className={`p-3 rounded-xl border ${theme === 'dark' ? 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-violet-500/50' : 'bg-black/5 border-black/10 hover:bg-black/10 hover:border-violet-500/50'} transition-all cursor-pointer group/item active:scale-95`}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] font-bold opacity-40 uppercase tracking-tighter">{entry.type}</span>
-                        <div className="flex items-center gap-1 opacity-40"><Clock className="w-3 h-3" /><span className="text-[10px]">{new Date(entry.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></div>
-                      </div>
-                      <p className={`text-[13px] font-bold ${theme === 'dark' ? 'text-violet-100 group-hover/item:text-violet-400' : 'text-slate-700 group-hover/item:text-violet-600'} truncate mb-1`}>{entry.input}</p>
-                      <p className={`text-[11px] font-mono ${entry.status.toLowerCase().includes('fail') ? 'text-rose-500' : 'text-emerald-500'} truncate`}>{entry.result}</p>
+                <div className="flex gap-4 flex-1 overflow-hidden mb-4">
+                  {/* Bulk Section */}
+                  <div className="flex-1 flex flex-col min-w-0">
+                    <h4 className={`text-[8px] font-black uppercase tracking-[0.2em] px-2 mb-2 ${theme === 'dark' ? 'text-violet-400/50' : 'text-slate-400'} sticky top-0 z-10 ${theme === 'dark' ? 'bg-[#0f0720]' : 'bg-white'}`}>Bulk Uploads</h4>
+                    <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-2">
+                      {history[appMode].some(e => e.type === 'bulk') ? (
+                        history[appMode].filter(e => e.type === 'bulk').map(entry => (
+                          <div key={entry.id} onClick={() => loadHistorySession(entry)} className={`p-2.5 rounded-xl border ${theme === 'dark' ? 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-violet-500/50' : 'bg-black/5 border-black/10 hover:bg-black/10 hover:border-violet-500/50'} transition-all cursor-pointer group/item active:scale-95`}>
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="flex items-center gap-1 opacity-40"><Clock className="w-2.5 h-2.5" /><span className="text-[9px]">{new Date(entry.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span></div>
+                            </div>
+                            <p className={`text-[12px] font-bold ${theme === 'dark' ? 'text-violet-100 group-hover/item:text-violet-400' : 'text-slate-700 group-hover/item:text-violet-600'} truncate mb-0.5`}>{formatHistoryInput(entry)}</p>
+                            <div className="flex flex-col gap-1 mt-1">
+                              <div className="flex items-center gap-2">
+                                <p className={`text-[10px] font-mono ${entry.status.toLowerCase().includes('fail') ? 'text-rose-500' : 'text-emerald-500'} truncate`}>{formatHistoryResult(entry.result)}</p>
+                                {entry.hasCached && (
+                                  <span className={`text-[7px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border transition-all ${theme === 'dark' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' : 'bg-violet-50 text-violet-600 border-violet-200'}`}>Already Processed</span>
+                                )}
+                                {entry.synced && (
+                                  <span className={`text-[7px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border transition-all ${theme === 'dark' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-200'}`}>Synced</span>
+                                )}
+                              </div>
+                              {entry.hasCached && entry.cachedAt && (
+                                <span className={`text-[8px] font-medium opacity-50 ${theme === 'dark' ? 'text-violet-300' : 'text-slate-500'}`}>
+                                  Ran on {new Date(entry.cachedAt).toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}  {entry.cachedType ? `via ${entry.cachedType === 'bulk' ? 'Bulk Upload' : 'Single Try'}` : ''}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-6 opacity-20 text-[8px] uppercase font-bold tracking-widest">None</div>
+                      )}
                     </div>
-                  ))}
-                  {history[appMode].length === 0 && <div className="text-center py-10 opacity-30"><HistoryIcon className="w-8 h-8 mx-auto mb-2 opacity-10" /><p className="text-[10px] uppercase font-bold tracking-widest">No history yet</p></div>}
+                  </div>
+
+                  {/* Single Section */}
+                  <div className="flex-1 flex flex-col min-w-0">
+                    <h4 className={`text-[8px] font-black uppercase tracking-[0.2em] px-2 mb-2 ${theme === 'dark' ? 'text-violet-400/50' : 'text-slate-400'} sticky top-0 z-10 ${theme === 'dark' ? 'bg-[#0f0720]' : 'bg-white'}`}>Single Try</h4>
+                    <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-2">
+                      {history[appMode].some(e => e.type === 'single') ? (
+                        history[appMode].filter(e => e.type === 'single').map(entry => (
+                          <div key={entry.id} onClick={() => loadHistorySession(entry)} className={`p-2.5 rounded-xl border ${theme === 'dark' ? 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-violet-500/50' : 'bg-black/5 border-black/10 hover:bg-black/10 hover:border-violet-500/50'} transition-all cursor-pointer group/item active:scale-95`}>
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="flex items-center gap-1 opacity-40"><Clock className="w-2.5 h-2.5" /><span className="text-[9px]">{new Date(entry.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span></div>
+                            </div>
+                            <p className={`text-[12px] font-bold ${theme === 'dark' ? 'text-violet-100 group-hover/item:text-violet-400' : 'text-slate-700 group-hover/item:text-violet-600'} truncate mb-0.5`}>{formatHistoryInput(entry)}</p>
+                            <div className="flex flex-col gap-1 mt-1">
+                              <div className="flex items-center gap-2">
+                                <p className={`text-[10px] font-mono ${entry.status.toLowerCase().includes('fail') ? 'text-rose-500' : 'text-emerald-500'} truncate`}>{formatHistoryResult(entry.result)}</p>
+                                {entry.hasCached && (
+                                  <span className={`text-[7px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border transition-all ${theme === 'dark' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' : 'bg-violet-50 text-violet-600 border-violet-200'}`}>Already Processed</span>
+                                )}
+                                {entry.synced && (
+                                  <span className={`text-[7px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border transition-all ${theme === 'dark' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-200'}`}>Synced</span>
+                                )}
+                              </div>
+                              {entry.hasCached && entry.cachedAt && (
+                                <span className={`text-[8px] font-medium opacity-50 ${theme === 'dark' ? 'text-violet-300' : 'text-slate-500'}`}>
+                                  Ran on {new Date(entry.cachedAt).toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}  {entry.cachedType ? `via ${entry.cachedType === 'bulk' ? 'Bulk Upload' : 'Single Try'}` : ''}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-6 opacity-20 text-[8px] uppercase font-bold tracking-widest">None</div>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 {/* App Note to cover the space */}
@@ -1372,9 +1791,17 @@ const App: React.FC = () => {
                       <div className="flex flex-col items-center text-center">
                         <div className="bg-violet-600/10 p-2.5 rounded-xl mb-2"><Zap className="w-6 h-6 text-violet-600" /></div>
                         <h3 className={`text-2xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Individual {appMode === 'verify' ? 'Check' : 'Search'}</h3>
+                        {singleResult && isHistoryView && appMode === 'enrich' && (
+                          <button
+                            onClick={handleGetApiResults}
+                            className="mt-3 flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all font-bold text-xs shadow-lg"
+                          >
+                            <Webhook className="w-4 h-4" /> Get API Results
+                          </button>
+                        )}
                       </div>
                       <button
-                        onClick={() => { setSingleName(''); setSingleCompany(''); setSingleEmail(''); setSingleResult(null); }}
+                        onClick={() => { setSingleName(''); setSingleCompany(''); setSingleEmail(''); setSingleResult(null); setIsHistoryView(false); }}
                         className={`text-[10px] font-bold uppercase tracking-widest px-3 py-2 rounded-lg transition-all ${theme === 'dark' ? 'text-rose-400 hover:bg-rose-500/10' : 'text-rose-600 hover:bg-rose-50'}`}
                       >
                         Clear All
@@ -1435,12 +1862,29 @@ const App: React.FC = () => {
                             {singleResult.email && <div className="flex flex-col items-center w-full"><span className={`text-[9px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1`}>Email Found</span><div className="flex items-center gap-2 w-full justify-center"><span className={`text-sm font-mono font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'} px-3 py-1.5 bg-violet-600/10 rounded-lg break-all`}>{singleResult.email}</span><button onClick={() => copyToClipboard(singleResult.email!)} className="p-1.5 hover:bg-violet-600/10 rounded-md text-violet-600"><Copy className="w-4 h-4" /></button></div></div>}
                             {singleResult.linkedinUrl && <div className="flex flex-col items-center w-full"><span className={`text-[9px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1`}>LinkedIn Profile</span><div className="flex items-center gap-2 w-full justify-center"><a href={singleResult.linkedinUrl} target="_blank" rel="noreferrer" className={`text-sm font-mono font-bold text-blue-500 hover:underline px-3 py-1.5 bg-blue-500/10 rounded-lg flex items-center gap-1.5 break-all`}>View Profile <ExternalLink className="w-3.5 h-3.5" /></a><button onClick={() => copyToClipboard(singleResult.linkedinUrl!)} className="p-1.5 hover:bg-blue-600/10 rounded-md text-blue-500"><Copy className="w-4 h-4" /></button></div></div>}
                           </div>
-                          <div className="mt-2 flex flex-col items-center"><span className={`text-[9px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1`}>Status</span><div className={`inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-[0.1em] px-4 py-1 rounded-full border shadow-sm ${singleResult.status === 'completed' || singleResult.status === 'deliverable' || singleResult.status === 'found' ? 'text-green-700 bg-green-100 border-green-200' : singleResult.status === 'undeliverable' || singleResult.status === 'failed' ? 'text-rose-700 bg-rose-100 border-rose-200' : 'text-amber-700 bg-amber-100 border-amber-200'}`}>{singleResult.status === 'deliverable' ? 'VALID' : (singleResult.status === 'undeliverable' ? 'INVALID' : (singleResult.status || 'FAILED'))}</div></div>
+                          <div className="mt-2 flex flex-col items-center">
+                            <span className={`text-[9px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1`}>Status</span>
+                            <div className="flex flex-col gap-1">
+                              <div className={`inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-[0.1em] px-3 py-1 rounded-full border shadow-sm ${singleResult.status === 'completed' || singleResult.status === 'deliverable' || singleResult.status === 'found' ? 'text-green-700 bg-green-100 border-green-200' : (singleResult.status === 'undeliverable' || singleResult.status === 'failed' ? 'text-rose-700 bg-rose-100 border-rose-200' : 'text-amber-700 bg-amber-100 border-amber-200')}`}>{singleResult.status === 'deliverable' ? 'VALID' : (singleResult.status === 'undeliverable' ? 'INVALID' : (singleResult.status || 'FAILED'))}</div>
+                              {singleResult.metadata?.cached && (
+                                <div className="flex flex-col items-center gap-1">
+                                  <div className={`inline-flex items-center justify-center gap-1 text-[7px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border ${theme === 'dark' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' : 'bg-violet-50 text-violet-600 border-violet-200'}`}>
+                                    Already Processed
+                                  </div>
+                                  {singleResult.cachedAt && (
+                                    <span className={`text-[8px] font-medium opacity-60 ${theme === 'dark' ? 'text-violet-300' : 'text-slate-500'}`}>
+                                      Ran on {new Date(singleResult.cachedAt).toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })} {singleResult.cachedType ? `via ${singleResult.cachedType === 'bulk' ? 'Bulk Upload' : 'Single Try'}` : ''}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
 
-                          {appMode === 'enrich' && (
+                          {appMode === 'enrich' && !isHistoryView && (
                             <button
                               onClick={handleSingleApiExport}
-                              className={`mt-4 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all border ${theme === 'dark' ? 'bg-blue-900/20 border-blue-800/40 text-blue-400 hover:bg-blue-900/40' : 'bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100'}`}
+                              className={`mt-4 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all border ${theme === 'dark' ? 'bg-blue-900/20 border-blue-800/40 text-blue-400 hover:bg-blue-900/40' : 'bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100'}`}
                             >
                               <Webhook className="w-3 h-3" /> Sync to API
                             </button>
@@ -1462,11 +1906,11 @@ const App: React.FC = () => {
                 <div className="space-y-4">
                   {appMode === 'enrich' || appMode === 'linkedin' ? (
                     <>
-                      <div><label className={`block text-[9px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1 ml-1`}>{appMode === 'linkedin' ? 'FULLNAME' : 'Full Name Column'}</label><select className={`w-full p-2 ${themeClasses.input} rounded-lg text-xs font-medium focus:ring-2 focus:ring-violet-500 outline-none transition-all appearance-none cursor-pointer`} value={mapping?.nameHeader || ''} onChange={(e) => { const val = e.target.value; setMapping(prev => ({ ...prev!, nameHeader: val })); setRows(prevRows => prevRows.map(r => ({ ...r, name: String(r.originalData[val] || '').trim() }))); }} disabled={isProcessing}>{headers.map(h => <option key={h} value={h} className={theme === 'dark' ? "bg-[#0f0720]" : "bg-white"}>{h}</option>)}</select></div>
-                      <div><label className={`block text-[9px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1 ml-1`}>{appMode === 'linkedin' ? 'COMPANY NAME' : 'Company/Domain Column'}</label><select className={`w-full p-2 ${themeClasses.input} rounded-lg text-xs font-medium focus:ring-2 focus:ring-violet-500 outline-none transition-all appearance-none cursor-pointer`} value={mapping?.companyHeader || ''} onChange={(e) => { const val = e.target.value; setMapping(prev => ({ ...prev!, companyHeader: val })); setRows(prevRows => prevRows.map(r => ({ ...r, company: String(r.originalData[val] || '').trim() }))); }} disabled={isProcessing}>{headers.map(h => <option key={h} value={h} className={theme === 'dark' ? "bg-[#0f0720]" : "bg-white"}>{h}</option>)}</select></div>
+                      <div><label className={`block text-[9px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1 ml-1`}>{appMode === 'linkedin' ? 'FULLNAME' : 'Full Name Column'}</label><select className={`w-full p-2 ${themeClasses.input} rounded-lg text-xs font-medium focus:ring-2 focus:ring-violet-500 outline-none transition-all appearance-none cursor-pointer`} value={mapping?.nameHeader || ''} onChange={(e) => { const val = e.target.value; setMapping(prev => ({ ...prev!, nameHeader: val })); setRows(prevRows => prevRows.map(r => ({ ...r, name: String(r.originalData[val] || '').trim() }))); }} disabled={isProcessing}><option value="">Select Column</option>{headers.map(h => <option key={h} value={h} className={theme === 'dark' ? "bg-[#0f0720]" : "bg-white"}>{h}</option>)}</select></div>
+                      <div><label className={`block text-[9px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1 ml-1`}>{appMode === 'linkedin' ? 'COMPANY NAME' : 'Company/Domain Column'}</label><select className={`w-full p-2 ${themeClasses.input} rounded-lg text-xs font-medium focus:ring-2 focus:ring-violet-500 outline-none transition-all appearance-none cursor-pointer`} value={mapping?.companyHeader || ''} onChange={(e) => { const val = e.target.value; setMapping(prev => ({ ...prev!, companyHeader: val })); setRows(prevRows => prevRows.map(r => ({ ...r, company: String(r.originalData[val] || '').trim() }))); }} disabled={isProcessing}><option value="">Select Column</option>{headers.map(h => <option key={h} value={h} className={theme === 'dark' ? "bg-[#0f0720]" : "bg-white"}>{h}</option>)}</select></div>
                     </>
                   ) : (
-                    <div><label className={`block text-[9px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1 ml-1`}>Email Column to Verify</label><select className={`w-full p-2 ${themeClasses.input} rounded-lg text-xs font-medium focus:ring-2 focus:ring-violet-500 outline-none transition-all appearance-none cursor-pointer`} value={mapping?.emailHeader || ''} onChange={(e) => { const val = e.target.value; setMapping(prev => ({ ...prev!, emailHeader: val })); setRows(prevRows => prevRows.map(r => ({ ...r, email: String(r.originalData[val] || '').trim() }))); }} disabled={isProcessing}>{headers.map(h => <option key={h} value={h} className={theme === 'dark' ? "bg-[#0f0720]" : "bg-white"}>{h}</option>)}</select></div>
+                    <div><label className={`block text-[9px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1 ml-1`}>Email Column to Verify</label><select className={`w-full p-2 ${themeClasses.input} rounded-lg text-xs font-medium focus:ring-2 focus:ring-violet-500 outline-none transition-all appearance-none cursor-pointer`} value={mapping?.emailHeader || ''} onChange={(e) => { const val = e.target.value; setMapping(prev => ({ ...prev!, emailHeader: val })); setRows(prevRows => prevRows.map(r => ({ ...r, email: String(r.originalData[val] || '').trim() }))); }} disabled={isProcessing}><option value="">Select Column</option>{headers.map(h => <option key={h} value={h} className={theme === 'dark' ? "bg-[#0f0720]" : "bg-white"}>{h}</option>)}</select></div>
                   )}
                   <button onClick={startProcessing} disabled={isProcessing || !mapping} className="w-full py-2.5 mt-2 bg-violet-600 hover:bg-violet-500 disabled:bg-violet-900/50 disabled:text-violet-400/50 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-xl text-xs">{isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : (appMode === 'enrich' ? <Mail className="w-4 h-4" /> : appMode === 'linkedin' ? <Linkedin className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />)}{isProcessing ? 'Processing...' : (appMode === 'enrich' ? 'Run Enrichment' : appMode === 'linkedin' ? 'Find Profiles' : 'Run Verification')}</button>
                 </div>
@@ -1476,12 +1920,33 @@ const App: React.FC = () => {
                 {stats.length > 0 ? (
                   <div className="h-40 mt-1"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={stats} innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value">{stats.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />)}</Pie><Tooltip contentStyle={{ fontSize: '12px', fontWeight: 'bold', backgroundColor: theme === 'dark' ? '#1e1b4b' : '#fff', border: theme === 'dark' ? '1px solid rgba(139, 92, 246, 0.3)' : '1px solid #e2e8f0', borderRadius: '10px' }} /><Legend iconSize={8} wrapperStyle={{ fontSize: '9px' }} /></PieChart></ResponsiveContainer></div>
                 ) : <div className={`text-center py-10 ${theme === 'dark' ? 'text-violet-400/30' : 'text-slate-400'} text-[9px] font-bold uppercase tracking-widest`}>Awaiting Data</div>}
-                {rows.some(r => r.status !== 'pending' && r.status !== 'processing') && <button onClick={() => setShowExportModal(true)} className="w-full mt-4 flex items-center justify-center gap-2 py-2 px-4 bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 transition-all font-bold text-[10px] shadow-lg"><Download className="w-3 h-3" /> Export</button>}
+                {rows.some(r => r.status !== 'pending' && r.status !== 'processing') && (
+                  <div className="flex flex-col gap-2 mt-4">
+                    <button onClick={() => setShowExportModal(true)} className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 transition-all font-bold text-[10px] shadow-lg"><Download className="w-3 h-3" /> Export</button>
+                  </div>
+                )}
               </div>
             </div>
             <div className="lg:col-span-3">
               <div className={`${themeClasses.card} rounded-3xl overflow-hidden flex flex-col h-[calc(100vh-10rem)]`}>
-                <div className={`px-8 py-6 border-b ${theme === 'dark' ? 'border-white/10' : 'border-black/5'} flex justify-between items-center`}><div className="flex flex-col"><h4 className={`font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{appMode === 'enrich' ? 'Enrichment Feed' : appMode === 'linkedin' ? 'LinkedIn Profiles' : 'Verification Feed'}</h4><span className={`text-[10px] font-bold ${themeClasses.label} uppercase tracking-widest`}>{rows.length} Total Records</span></div></div>
+                <div className={`px-8 py-6 border-b ${theme === 'dark' ? 'border-white/10' : 'border-black/5'} flex justify-between items-center`}>
+                  <div className="flex flex-col">
+                    <h4 className={`font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{appMode === 'enrich' ? 'Enrichment Feed' : appMode === 'linkedin' ? 'LinkedIn Profiles' : 'Verification Feed'}</h4>
+                    <span className={`text-[10px] font-bold ${themeClasses.label} uppercase tracking-widest`}>{rows.length} Total Records</span>
+                  </div>
+                  {rows.some(r => r.status !== 'pending' && r.status !== 'processing') && (
+                    <div className="flex items-center gap-3">
+                      {isHistoryView && appMode === 'enrich' && (
+                        <button
+                          onClick={handleGetApiResults}
+                          className="px-5 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-500 transition-all font-bold text-xs shadow-lg flex items-center gap-2"
+                        >
+                          <Webhook className="w-4 h-4" /> Get API Results
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
                 <div className="flex-1 overflow-auto custom-scrollbar px-4">
                   <table className="w-full text-left border-separate border-spacing-y-2">
                     <thead className="sticky top-0 z-20">
@@ -1503,8 +1968,20 @@ const App: React.FC = () => {
                             <td className={`px-6 py-3 ${themeClasses.tableCell} transition-colors`}>{row.linkedinUrl ? <div className="flex items-center gap-3"><a href={row.linkedinUrl} target="_blank" rel="noreferrer" className={`text-sm font-mono text-blue-500 hover:underline flex items-center gap-1.5 break-all`}><Linkedin className="w-3.5 h-3.5" /> Profile</a><button onClick={() => copyToClipboard(row.linkedinUrl!)} className={`p-1.5 ${theme === 'dark' ? 'hover:bg-violet-500/20 text-violet-400' : 'hover:bg-amber-200 text-slate-500'} rounded-md transition-all`}><Copy className="w-4 h-4" /></button></div> : <span className={`text-[11px] font-bold ${themeClasses.statusPending} uppercase tracking-widest italic`}>Ready</span>}</td>
                           )}
                           <td className={`px-6 py-3 last:rounded-r-2xl ${themeClasses.tableCell} transition-colors`}>
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-col gap-1">
                               <div className={`inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em] px-4 py-1.5 rounded-full border shadow-sm transition-all duration-300 ${row.status === 'processing' || row.status === 'searching' ? 'text-violet-600 bg-violet-100 border-violet-200 animate-pulse' : row.status === 'completed' || row.status === 'deliverable' || row.status === 'found' ? 'text-green-700 bg-green-100 border-green-200' : row.status === 'not_found' || row.status === 'risky' ? 'text-amber-700 bg-amber-100 border-amber-200' : row.status === 'failed' || row.status === 'undeliverable' ? 'text-rose-700 bg-rose-100 border-rose-200' : row.status === 'unknown' ? 'text-slate-600 bg-slate-100 border-slate-200' : themeClasses.statusPending}`}>{(row.status === 'processing' || row.status === 'searching') && <Loader2 className="w-3 h-3 animate-spin" />}{row.status === 'deliverable' ? 'VALID' : (row.status === 'undeliverable' ? 'INVALID' : row.status)}</div>
+                              {row.metadata?.cached && (
+                                <div className="flex flex-col items-center gap-1">
+                                  <div className={`inline-flex items-center justify-center gap-1 text-[7px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border ${theme === 'dark' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' : 'bg-violet-50 text-violet-600 border-violet-200'}`}>
+                                    Already Processed
+                                  </div>
+                                  {row.cachedAt && (
+                                    <span className={`text-[8px] font-medium opacity-60 ${theme === 'dark' ? 'text-violet-300' : 'text-slate-500'}`}>
+                                      Ran on {new Date(row.cachedAt).toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}  {row.cachedType ? `via ${row.cachedType === 'bulk' ? 'Bulk Upload' : 'Single Try'}` : ''}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </td>
                         </tr>
