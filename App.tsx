@@ -1732,18 +1732,10 @@ const App: React.FC = () => {
                             <div className="flex flex-col gap-1 mt-1">
                               <div className="flex items-center gap-2">
                                 <p className={`text-[10px] font-mono ${entry.status.toLowerCase().includes('fail') ? 'text-rose-500' : 'text-emerald-500'} truncate`}>{formatHistoryResult(entry.result)}</p>
-                                {entry.hasCached && (
-                                  <span className={`text-[7px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border transition-all ${theme === 'dark' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' : 'bg-violet-50 text-violet-600 border-violet-200'}`}>Already Processed</span>
-                                )}
                                 {entry.synced && (
                                   <span className={`text-[7px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border transition-all ${theme === 'dark' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-200'}`}>Synced</span>
                                 )}
                               </div>
-                              {entry.hasCached && entry.cachedAt && (
-                                <span className={`text-[8px] font-medium opacity-50 ${theme === 'dark' ? 'text-violet-300' : 'text-slate-500'}`}>
-                                  Ran on {new Date(entry.cachedAt).toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}  {entry.cachedType ? `via ${entry.cachedType === 'bulk' ? 'Bulk Upload' : 'Single Try'}` : ''}
-                                </span>
-                              )}
                             </div>
                           </div>
                         ))
