@@ -47,5 +47,4 @@ export interface HistoryEntry {
     hasCached?: boolean;
     cachedAt?: string;
     cachedType?: string;
-    originalHistoryId?: string;
 }

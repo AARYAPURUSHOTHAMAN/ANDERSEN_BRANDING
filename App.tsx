@@ -173,7 +173,7 @@ const App: React.FC = () => {
     const [singleName, setSingleName] = useState('');
     const [singleCompany, setSingleCompany] = useState('');
     const [singleEmail, setSingleEmail] = useState('');
-    const [singleResult, setSingleResult] = useState<{ email?: string; linkedinUrl?: string; status?: string; message?: string; rawData?: any; metadata?: any; cachedAt?: string; cachedType?: string; originalHistoryId?: string } | null>(null);
+    const [singleResult, setSingleResult] = useState<{ email?: string; linkedinUrl?: string; status?: string; message?: string; rawData?: any; metadata?: any; cachedAt?: string; cachedType?: string } | null>(null);
 
     // Listen for auth state changes
     useEffect(() => {
@@ -238,8 +238,7 @@ const App: React.FC = () => {
                         cachedAt: row.data?.[0]?.cachedAt,
                         // Cross-reference with api_sync_results table for truth
                         synced: syncedIds.has(row.id) || (Array.isArray(row.data) ? row.data[0]?.synced : row.data?.synced),
-                        cachedType: Array.isArray(row.data) ? row.data[0]?.cachedType : row.data?.cachedType,
-                        originalHistoryId: Array.isArray(row.data) ? row.data[0]?.originalHistoryId : row.data?.originalHistoryId
+                        cachedType: Array.isArray(row.data) ? row.data[0]?.cachedType : row.data?.cachedType
                     };
 
                     if (row.data?.[0]?.synced) {
@@ -330,8 +329,7 @@ const App: React.FC = () => {
                 hasCached: entry.hasCached,
                 cachedAt: entry.cachedAt,
                 cachedType: entry.cachedType,
-                synced: entry.synced,
-                originalHistoryId: entry.originalHistoryId
+                synced: entry.synced
             }];
 
             // 2. Insert into 'history' table with feature
@@ -812,8 +810,7 @@ const App: React.FC = () => {
                     rawData: existing.result,
                     metadata: { cached: true },
                     cachedAt: existing.created_at,
-                    cachedType: (existing as any).historyType,
-                    originalHistoryId: existing.history_id
+                    cachedType: (existing as any).historyType
                 });
 
                 const cachedHistoryEntry: HistoryEntry = {
@@ -835,8 +832,7 @@ const App: React.FC = () => {
                     }],
                     hasCached: true,
                     cachedAt: existing.created_at,
-                    cachedType: (existing as any).historyType,
-                    originalHistoryId: existing.history_id
+                    cachedType: (existing as any).historyType
                 };
 
                 const supabaseId = await saveToSupabase(cachedHistoryEntry, appMode);
@@ -1038,8 +1034,7 @@ const App: React.FC = () => {
                     const mockResult: any = {
                         status: record.status,
                         message: "Already Processed", // Add message for cached single result
-                        rawData: { cached: true }, // Add cached metadata
-                        originalHistoryId: entry.originalHistoryId
+                        rawData: { cached: true } // Add cached metadata
                     };
 
                     if (entry.feature === 'verify') {
@@ -1058,7 +1053,7 @@ const App: React.FC = () => {
                     setSingleResult(mockResult);
                 }
             } else {
-                const mockResult: any = { status: entry.status, message: "Already Processed", originalHistoryId: entry.originalHistoryId }; // Add message for cached single result
+                const mockResult: any = { status: entry.status, message: "Already Processed" }; // Add message for cached single result
                 if (appMode === 'enrich') mockResult.email = entry.result;
                 else if (appMode === 'linkedin') mockResult.linkedinUrl = entry.result;
                 setSingleResult(mockResult);
@@ -1344,27 +1339,17 @@ const App: React.FC = () => {
 
     const handleGetApiResults = async () => {
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-        const effectiveHistoryId = (inputMode === 'single' && singleResult?.originalHistoryId)
-            ? singleResult.originalHistoryId
-            : currentHistoryId;
-
-        if (!effectiveHistoryId || !uuidRegex.test(effectiveHistoryId)) {
+        if (!currentHistoryId || !uuidRegex.test(currentHistoryId)) {
             alert("Invalid session ID or historical entry. Search for new results or click a synced entry from history.");
             return;
         }
 
         setIsProcessing(true);
         try {
-            let query = supabase.from('api_sync_results').select('*').eq('history_id', effectiveHistoryId);
-
-            // If it's a single search from a bulk cache, filter to just this record
-            if (inputMode === 'single' && singleResult?.originalHistoryId) {
-                if (singleName) query = query.ilike('prospect_name', singleName.trim());
-                if (singleCompany) query = query.ilike('prospect_company', singleCompany.trim());
-            }
-
-            const { data, error } = await query;
+            const { data, error } = await supabase
+                .from('api_sync_results')
+                .select('*')
+                .eq('history_id', currentHistoryId);
 
             if (error) throw error;
 
@@ -1891,15 +1876,6 @@ const App: React.FC = () => {
                                                             )}
                                                         </div>
                                                     </div>
-
-                                                    {(appMode === 'enrich' || appMode === 'verify' || appMode === 'linkedin') && (isHistoryView || singleResult.originalHistoryId) && (
-                                                        <button
-                                                            onClick={handleGetApiResults}
-                                                            className={`mt-4 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all border ${theme === 'dark' ? 'bg-teal-900/20 border-teal-800/40 text-teal-400 hover:bg-teal-900/40' : 'bg-teal-50 border-teal-200 text-teal-600 hover:bg-teal-100'}`}
-                                                        >
-                                                            <FileSpreadsheet className="w-3 h-3" /> Get API Results
-                                                        </button>
-                                                    )}
 
                                                     {appMode === 'enrich' && !isHistoryView && (
                                                         <button
