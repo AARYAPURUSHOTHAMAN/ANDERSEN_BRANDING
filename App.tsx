@@ -238,7 +238,7 @@ const App: React.FC = () => {
             cachedAt: row.data?.[0]?.cachedAt,
             // Cross-reference with api_sync_results table for truth
             synced: syncedIds.has(row.id) || (Array.isArray(row.data) ? row.data[0]?.synced : row.data?.synced),
-            cachedType: Array.isArray(row.data) ? row.data[0]?.cachedType : row.data?.cachedType
+            cachedType: (Array.isArray(row.data) ? row.data[0]?.cachedType : row.data?.cachedType) || (row.data?.[0]?.hasCached ? 'bulk' : undefined) // Fallback for older data
           };
 
           if (row.data?.[0]?.synced) {
@@ -703,7 +703,8 @@ const App: React.FC = () => {
       headers: [...headers],
       mapping: mapping ? { ...mapping } : undefined,
       hasCached: currentRowsState.some(r => r.metadata?.cached),
-      cachedAt: currentRowsState.find(r => r.cachedAt)?.cachedAt
+      cachedAt: currentRowsState.find(r => r.cachedAt)?.cachedAt,
+      cachedType: currentRowsState.find(r => r.cachedType)?.cachedType
     };
 
     // Save to Supabase
@@ -1040,26 +1041,36 @@ const App: React.FC = () => {
           const mockResult: any = {
             status: record.status,
             message: "Already Processed", // Add message for cached single result
-            rawData: { cached: true } // Add cached metadata
+            rawData: { cached: true, synced: entry.synced },
+            cachedAt: entry.cachedAt,
+            cachedType: entry.cachedType
           };
 
           if (entry.feature === 'verify') {
             mockResult.email = record.email;
             if (record.result) {
               mockResult.message = record.result.message;
-              mockResult.rawData = { ...record.result, cached: true };
+              mockResult.rawData = { ...record.result, cached: true, synced: entry.synced };
             }
           } else if (entry.feature === 'linkedin') {
             mockResult.linkedinUrl = record.linkedin_url;
+            mockResult.rawData = { ...record, cached: true, synced: entry.synced };
           } else {
             // Default / Enrich
             mockResult.email = record.email;
+            mockResult.rawData = { ...record, cached: true, synced: entry.synced };
           }
 
           setSingleResult(mockResult);
         }
       } else {
-        const mockResult: any = { status: entry.status, message: "Already Processed" }; // Add message for cached single result
+        const mockResult: any = {
+          status: entry.status,
+          message: "Already Processed",
+          cachedAt: entry.cachedAt,
+          cachedType: entry.cachedType,
+          metadata: { cached: true, synced: entry.synced }
+        };
         if (appMode === 'enrich') mockResult.email = entry.result;
         else if (appMode === 'linkedin') mockResult.linkedinUrl = entry.result;
         setSingleResult(mockResult);
@@ -1175,11 +1186,7 @@ const App: React.FC = () => {
       try {
         const jsonData = await responseClone.json();
         const processedData = processApiData(jsonData);
-        // Inject Run Type for immediate display
-        const displayData = Array.isArray(processedData)
-          ? processedData.map(item => ({ "Run Type": "Bulk Upload", ...item }))
-          : { "Run Type": "Bulk Upload", ...processedData };
-        setApiResponseData(displayData);
+        setApiResponseData(processedData);
         setShowApiResultModal(true);
 
         // Save to Supabase api_sync_results (individual rows)
@@ -1283,11 +1290,7 @@ const App: React.FC = () => {
       try {
         const jsonData = await responseClone.json();
         const processedData = processApiData(jsonData);
-        // Inject Run Type for immediate display
-        const displayData = Array.isArray(processedData)
-          ? processedData.map(item => ({ "Run Type": "Single Try", ...item }))
-          : { "Run Type": "Single Try", ...processedData };
-        setApiResponseData(displayData);
+        setApiResponseData(processedData);
         setShowApiResultModal(true);
 
         // Save to Supabase api_sync_results (individual rows)
@@ -1402,19 +1405,10 @@ const App: React.FC = () => {
         return;
       }
 
-      // Fetch the history type to determine "Run Type"
-      // Use the history_id from the first row as they should all be part of the same session
-      const targetHistoryId = data[0].history_id;
-      const { data: hData } = await supabase.from('history').select('type').eq('id', targetHistoryId).single();
-      const runType = hData?.type === 'bulk' ? 'Bulk Upload' : 'Single Try';
-
-      // Filter out internal metadata columns for display and inject Run Type
+      // Filter out internal metadata columns for display
       const filteredData = data.map(item => {
         const { id, user_id, history_id, feature, created_at, ...rest } = item;
-        return {
-          "Run Type": runType,
-          ...rest
-        };
+        return rest;
       });
 
       setApiResponseData(filteredData);
