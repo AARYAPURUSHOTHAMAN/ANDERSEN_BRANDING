@@ -343,7 +343,8 @@ const App: React.FC = () => {
         timestamp: entry.timestamp,
         data: minimalData,
         headers: entry.headers,
-        mapping: entry.mapping
+        mapping: entry.mapping,
+        synced: entry.synced
       }).select().single();
 
       if (historyError) throw historyError;
@@ -627,24 +628,27 @@ const App: React.FC = () => {
           resultRowUpdate = {
             email: existing.email,
             status: existing.status as any,
-            metadata: { ...existing.result, cached: true },
+            metadata: { ...existing.result, cached: true, synced: (existing as any).synced },
             cachedAt: existing.created_at,
-            cachedType: (existing as any).historyType
+            cachedType: (existing as any).historyType,
+            synced: (existing as any).synced
           };
         } else if (appMode === 'linkedin') {
           resultRowUpdate = {
             linkedinUrl: existing.linkedin_url,
             status: existing.status as any,
-            metadata: { cached: true },
+            metadata: { cached: true, synced: (existing as any).synced },
             cachedAt: existing.created_at,
-            cachedType: (existing as any).historyType
+            cachedType: (existing as any).historyType,
+            synced: (existing as any).synced
           };
         } else if (appMode === 'verify') {
           resultRowUpdate = {
             status: existing.status as any,
-            metadata: { ...existing.rawData, cached: true },
+            metadata: { ...existing.rawData, cached: true, synced: (existing as any).synced },
             cachedAt: existing.created_at,
-            cachedType: (existing as any).historyType
+            cachedType: (existing as any).historyType,
+            synced: (existing as any).synced
           };
         }
       } else {
@@ -777,10 +781,11 @@ const App: React.FC = () => {
       }
 
       if (result && result.history_id) {
-        const { data: hData } = await supabase.from('history').select('type, data').eq('id', result.history_id).single();
+        const { data: hData } = await supabase.from('history').select('type, data, synced').eq('id', result.history_id).single();
         if (hData) {
           const cachedTypeFromData = Array.isArray(hData.data) ? hData.data[0]?.cachedType : hData.data?.cachedType;
           (result as any).historyType = cachedTypeFromData || hData.type;
+          (result as any).synced = hData.synced || (Array.isArray(hData.data) ? hData.data[0]?.synced : hData.data?.synced);
         }
       }
       return result || null;
@@ -808,7 +813,7 @@ const App: React.FC = () => {
           status: existing.status,
           message: "Already Processed",
           rawData: existing.result,
-          metadata: { cached: true },
+          metadata: { cached: true, synced: (existing as any).synced },
           cachedAt: existing.created_at,
           cachedType: (existing as any).historyType
         });
@@ -820,6 +825,7 @@ const App: React.FC = () => {
           result: existing.email || existing.linkedin_url || existing.status || 'Success',
           status: existing.status || 'completed',
           timestamp: Date.now(),
+          synced: (existing as any).synced,
           data: [{
             id: `single-row-${Date.now()}`,
             name: singleName,
@@ -828,7 +834,7 @@ const App: React.FC = () => {
             linkedinUrl: existing.linkedin_url,
             status: existing.status,
             originalData: {},
-            metadata: { ...existing.result, cached: true } // Ensure metadata includes cached status
+            metadata: { ...existing.result, cached: true, synced: (existing as any).synced } // Ensure metadata includes cached status
           }],
           hasCached: true,
           cachedAt: existing.created_at,
@@ -1346,12 +1352,42 @@ const App: React.FC = () => {
 
     setIsProcessing(true);
     try {
-      const { data, error } = await supabase
+      // 1. Primary lookup by direct history_id
+      const { data: idResults, error: idError } = await supabase
         .from('api_sync_results')
         .select('*')
         .eq('history_id', currentHistoryId);
 
-      if (error) throw error;
+      if (idError) throw idError;
+
+      let data = idResults || [];
+
+      // 2. Fallback for single search: Look by identifier if direct session match fails
+      if (data.length === 0 && inputMode === 'single' && session?.user?.id) {
+        console.log("No direct history sync found, attempting identifier fallback...");
+        let fallbackQuery = supabase
+          .from('api_sync_results')
+          .select('*')
+          .eq('user_id', session.user.id);
+
+        if (appMode === 'verify') {
+          fallbackQuery = fallbackQuery.ilike('email_used', singleEmail.trim());
+        } else {
+          // Support both name/company formats stored in api_sync_results
+          fallbackQuery = fallbackQuery
+            .ilike('prospect_name', singleName.trim())
+            .ilike('prospect_company', singleCompany.trim());
+        }
+
+        const { data: fallbackData } = await fallbackQuery
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (fallbackData && fallbackData.length > 0) {
+          console.log("Found sync result via identifier fallback", fallbackData[0].id);
+          data = fallbackData;
+        }
+      }
 
       if (!data || data.length === 0) {
         alert("No API results found for this session.");
