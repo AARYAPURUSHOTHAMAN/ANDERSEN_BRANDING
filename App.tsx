@@ -238,7 +238,8 @@ const App: React.FC = () => {
                         cachedAt: row.data?.[0]?.cachedAt,
                         // Cross-reference with api_sync_results table for truth
                         synced: syncedIds.has(row.id) || (Array.isArray(row.data) ? row.data[0]?.synced : row.data?.synced),
-                        cachedType: Array.isArray(row.data) ? row.data[0]?.cachedType : row.data?.cachedType
+                        cachedType: Array.isArray(row.data) ? row.data[0]?.cachedType : row.data?.cachedType,
+                        originalHistoryId: Array.isArray(row.data) ? row.data[0]?.originalHistoryId : row.data?.originalHistoryId
                     };
 
                     if (row.data?.[0]?.synced) {
@@ -329,7 +330,8 @@ const App: React.FC = () => {
                 hasCached: entry.hasCached,
                 cachedAt: entry.cachedAt,
                 cachedType: entry.cachedType,
-                synced: entry.synced
+                synced: entry.synced,
+                originalHistoryId: entry.originalHistoryId
             }];
 
             // 2. Insert into 'history' table with feature
@@ -833,7 +835,8 @@ const App: React.FC = () => {
                     }],
                     hasCached: true,
                     cachedAt: existing.created_at,
-                    cachedType: (existing as any).historyType
+                    cachedType: (existing as any).historyType,
+                    originalHistoryId: existing.history_id
                 };
 
                 const supabaseId = await saveToSupabase(cachedHistoryEntry, appMode);
@@ -1035,7 +1038,8 @@ const App: React.FC = () => {
                     const mockResult: any = {
                         status: record.status,
                         message: "Already Processed", // Add message for cached single result
-                        rawData: { cached: true } // Add cached metadata
+                        rawData: { cached: true }, // Add cached metadata
+                        originalHistoryId: entry.originalHistoryId
                     };
 
                     if (entry.feature === 'verify') {
@@ -1054,7 +1058,7 @@ const App: React.FC = () => {
                     setSingleResult(mockResult);
                 }
             } else {
-                const mockResult: any = { status: entry.status, message: "Already Processed" }; // Add message for cached single result
+                const mockResult: any = { status: entry.status, message: "Already Processed", originalHistoryId: entry.originalHistoryId }; // Add message for cached single result
                 if (appMode === 'enrich') mockResult.email = entry.result;
                 else if (appMode === 'linkedin') mockResult.linkedinUrl = entry.result;
                 setSingleResult(mockResult);
@@ -1887,6 +1891,15 @@ const App: React.FC = () => {
                                                             )}
                                                         </div>
                                                     </div>
+
+                                                    {(appMode === 'enrich' || appMode === 'verify' || appMode === 'linkedin') && (isHistoryView || singleResult.originalHistoryId) && (
+                                                        <button
+                                                            onClick={handleGetApiResults}
+                                                            className={`mt-4 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all border ${theme === 'dark' ? 'bg-teal-900/20 border-teal-800/40 text-teal-400 hover:bg-teal-900/40' : 'bg-teal-50 border-teal-200 text-teal-600 hover:bg-teal-100'}`}
+                                                        >
+                                                            <FileSpreadsheet className="w-3 h-3" /> Get API Results
+                                                        </button>
+                                                    )}
 
                                                     {appMode === 'enrich' && !isHistoryView && (
                                                         <button
