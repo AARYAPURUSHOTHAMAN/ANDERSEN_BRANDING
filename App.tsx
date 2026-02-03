@@ -47,7 +47,12 @@ import { suggestMappings, findLinkedInUrl } from './services/geminiService';
 const SUPABASE_URL = (import.meta as any).env?.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://jftnwoojuofxzufmrogx.supabase.co';
 const SUPABASE_ANON_KEY = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpmdG53b29qdW9meHp1Zm1yb2d4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg5MzE3NDAsImV4cCI6MjA4NDUwNzc0MH0.NI_ZasN_JiVAg_4uKiwm4HKUgdZ9qVKwYSjcVySaJLs';
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: true, // Changed to true to match default, but making explicit
+    autoRefreshToken: true,
+  }
+});
 
 /**
  * Utility for Tailwind class merging
@@ -149,6 +154,11 @@ const App: React.FC = () => {
 
   // App Logic State
   const [file, setFile] = useState<File | null>(null);
+
+  // Debugging Render State
+  useEffect(() => {
+    console.log("App Render State - session:", session ? "Present" : "Null", "isInitialAuthCheck:", isInitialAuthCheck);
+  }, [session, isInitialAuthCheck]);
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<ProspectRow[]>([]);
   const [mapping, setMapping] = useState<MappingConfig | null>(null);
@@ -169,6 +179,7 @@ const App: React.FC = () => {
   useEffect(() => {
     // Check initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log("Initial auth check:", session ? "Session restored" : "No session found");
       setSession(session);
       setIsInitialAuthCheck(false);
     }).catch(err => {
@@ -177,6 +188,7 @@ const App: React.FC = () => {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log(`Auth state changed: ${_event}`, session ? "Session active" : "No session");
       setSession(session);
     });
 
@@ -1938,7 +1950,7 @@ const App: React.FC = () => {
                         {(appMode === 'enrich' || appMode === 'linkedin') && <th className={`px-6 py-3 text-[10px] font-bold ${themeClasses.label} uppercase tracking-[0.2em] ${themeClasses.tableHeader} first:rounded-l-2xl sticky top-0 z-20`}>Contact</th>}
                         {appMode !== 'linkedin' && <th className={`px-6 py-3 text-[10px] font-bold ${themeClasses.label} uppercase tracking-[0.2em] ${themeClasses.tableHeader} sticky top-0 z-20`}>Email</th>}
                         {appMode === 'linkedin' && <th className={`px-6 py-3 text-[10px] font-bold ${themeClasses.label} uppercase tracking-[0.2em] ${themeClasses.tableHeader} sticky top-0 z-20`}>LinkedIn Profile</th>}
-                        <th className={`px-6 py-3 text-[10px] font-bold ${themeClasses.label} uppercase tracking-[0.2em] ${themeClasses.tableHeader} last:rounded-r-2xl sticky top-0 z-20`}>Status</th>
+                        <th className={`px-6 py-3 text-[10px] font-bold ${themeClasses.label} uppercase tracking-[0.2em] ${themeClasses.tableHeader} last:rounded-r-2xl sticky top-0 z-20 text-center`}>Status</th>
                       </tr>
                     </thead>
                     <tbody className="px-4">
@@ -1951,9 +1963,9 @@ const App: React.FC = () => {
                           {appMode === 'linkedin' && (
                             <td className={`px-6 py-3 ${themeClasses.tableCell} transition-colors`}>{row.linkedinUrl ? <div className="flex items-center gap-3"><a href={row.linkedinUrl} target="_blank" rel="noreferrer" className={`text-sm font-mono text-blue-500 hover:underline flex items-center gap-1.5 break-all`}><Linkedin className="w-3.5 h-3.5" /> Profile</a><button onClick={() => copyToClipboard(row.linkedinUrl!)} className={`p-1.5 ${theme === 'dark' ? 'hover:bg-violet-500/20 text-violet-400' : 'hover:bg-amber-200 text-slate-500'} rounded-md transition-all`}><Copy className="w-4 h-4" /></button></div> : <span className={`text-[11px] font-bold ${themeClasses.statusPending} uppercase tracking-widest italic`}>Ready</span>}</td>
                           )}
-                          <td className={`px-6 py-3 last:rounded-r-2xl ${themeClasses.tableCell} transition-colors`}>
-                            <div className="flex flex-col gap-1">
-                              <div className={`inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em] px-4 py-1.5 rounded-full border shadow-sm transition-all duration-300 ${row.status === 'processing' || row.status === 'searching' ? 'text-violet-600 bg-violet-100 border-violet-200 animate-pulse' : row.status === 'completed' || row.status === 'deliverable' || row.status === 'found' ? 'text-green-700 bg-green-100 border-green-200' : row.status === 'not_found' || row.status === 'risky' ? 'text-amber-700 bg-amber-100 border-amber-200' : row.status === 'failed' || row.status === 'undeliverable' ? 'text-rose-700 bg-rose-100 border-rose-200' : row.status === 'unknown' ? 'text-slate-600 bg-slate-100 border-slate-200' : themeClasses.statusPending}`}>{(row.status === 'processing' || row.status === 'searching') && <Loader2 className="w-3 h-3 animate-spin" />}{row.status === 'deliverable' ? 'VALID' : (row.status === 'undeliverable' ? 'INVALID' : row.status)}</div>
+                          <td className={`px-6 py-3 last:rounded-r-2xl ${themeClasses.tableCell} transition-colors text-center`}>
+                            <div className="flex flex-col items-center gap-1">
+                              <div className={`inline-flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em] px-4 py-1.5 rounded-full border shadow-sm transition-all duration-300 min-w-[120px] ${row.status === 'processing' || row.status === 'searching' ? 'text-violet-600 bg-violet-100 border-violet-200 animate-pulse' : row.status === 'completed' || row.status === 'deliverable' || row.status === 'found' ? 'text-green-700 bg-green-100 border-green-200' : row.status === 'not_found' || row.status === 'risky' ? 'text-amber-700 bg-amber-100 border-amber-200' : row.status === 'failed' || row.status === 'undeliverable' ? 'text-rose-700 bg-rose-100 border-rose-200' : row.status === 'unknown' ? 'text-slate-600 bg-slate-100 border-slate-200' : themeClasses.statusPending}`}>{(row.status === 'processing' || row.status === 'searching') && <Loader2 className="w-3 h-3 animate-spin" />}{row.status === 'deliverable' ? 'VALID' : (row.status === 'undeliverable' ? 'INVALID' : row.status)}</div>
                               {row.metadata?.cached && (
                                 <div className="flex flex-col items-center gap-1">
                                   <div className={`inline-flex items-center justify-center gap-1 text-[7px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border ${theme === 'dark' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' : 'bg-violet-50 text-violet-600 border-violet-200'}`}>
