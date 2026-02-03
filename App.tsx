@@ -238,7 +238,7 @@ const App: React.FC = () => {
             cachedAt: row.data?.[0]?.cachedAt,
             // Cross-reference with api_sync_results table for truth
             synced: syncedIds.has(row.id) || (Array.isArray(row.data) ? row.data[0]?.synced : row.data?.synced),
-            cachedType: (Array.isArray(row.data) ? row.data[0]?.cachedType : row.data?.cachedType) || (row.data?.[0]?.hasCached ? 'bulk' : undefined) // Fallback for older data
+            cachedType: Array.isArray(row.data) ? row.data[0]?.cachedType : row.data?.cachedType
           };
 
           if (row.data?.[0]?.synced) {
@@ -343,8 +343,7 @@ const App: React.FC = () => {
         timestamp: entry.timestamp,
         data: minimalData,
         headers: entry.headers,
-        mapping: entry.mapping,
-        synced: entry.synced
+        mapping: entry.mapping
       }).select().single();
 
       if (historyError) throw historyError;
@@ -628,27 +627,24 @@ const App: React.FC = () => {
           resultRowUpdate = {
             email: existing.email,
             status: existing.status as any,
-            metadata: { ...existing.result, cached: true, synced: (existing as any).synced },
+            metadata: { ...existing.result, cached: true },
             cachedAt: existing.created_at,
-            cachedType: (existing as any).historyType,
-            synced: (existing as any).synced
+            cachedType: (existing as any).historyType
           };
         } else if (appMode === 'linkedin') {
           resultRowUpdate = {
             linkedinUrl: existing.linkedin_url,
             status: existing.status as any,
-            metadata: { cached: true, synced: (existing as any).synced },
+            metadata: { cached: true },
             cachedAt: existing.created_at,
-            cachedType: (existing as any).historyType,
-            synced: (existing as any).synced
+            cachedType: (existing as any).historyType
           };
         } else if (appMode === 'verify') {
           resultRowUpdate = {
             status: existing.status as any,
-            metadata: { ...existing.rawData, cached: true, synced: (existing as any).synced },
+            metadata: { ...existing.rawData, cached: true },
             cachedAt: existing.created_at,
-            cachedType: (existing as any).historyType,
-            synced: (existing as any).synced
+            cachedType: (existing as any).historyType
           };
         }
       } else {
@@ -703,8 +699,7 @@ const App: React.FC = () => {
       headers: [...headers],
       mapping: mapping ? { ...mapping } : undefined,
       hasCached: currentRowsState.some(r => r.metadata?.cached),
-      cachedAt: currentRowsState.find(r => r.cachedAt)?.cachedAt,
-      cachedType: currentRowsState.find(r => r.cachedType)?.cachedType
+      cachedAt: currentRowsState.find(r => r.cachedAt)?.cachedAt
     };
 
     // Save to Supabase
@@ -782,11 +777,10 @@ const App: React.FC = () => {
       }
 
       if (result && result.history_id) {
-        const { data: hData } = await supabase.from('history').select('type, data, synced').eq('id', result.history_id).single();
+        const { data: hData } = await supabase.from('history').select('type, data').eq('id', result.history_id).single();
         if (hData) {
           const cachedTypeFromData = Array.isArray(hData.data) ? hData.data[0]?.cachedType : hData.data?.cachedType;
           (result as any).historyType = cachedTypeFromData || hData.type;
-          (result as any).synced = hData.synced || (Array.isArray(hData.data) ? hData.data[0]?.synced : hData.data?.synced);
         }
       }
       return result || null;
@@ -814,7 +808,7 @@ const App: React.FC = () => {
           status: existing.status,
           message: "Already Processed",
           rawData: existing.result,
-          metadata: { cached: true, synced: (existing as any).synced },
+          metadata: { cached: true },
           cachedAt: existing.created_at,
           cachedType: (existing as any).historyType
         });
@@ -826,7 +820,6 @@ const App: React.FC = () => {
           result: existing.email || existing.linkedin_url || existing.status || 'Success',
           status: existing.status || 'completed',
           timestamp: Date.now(),
-          synced: (existing as any).synced,
           data: [{
             id: `single-row-${Date.now()}`,
             name: singleName,
@@ -835,7 +828,7 @@ const App: React.FC = () => {
             linkedinUrl: existing.linkedin_url,
             status: existing.status,
             originalData: {},
-            metadata: { ...existing.result, cached: true, synced: (existing as any).synced } // Ensure metadata includes cached status
+            metadata: { ...existing.result, cached: true } // Ensure metadata includes cached status
           }],
           hasCached: true,
           cachedAt: existing.created_at,
@@ -1041,36 +1034,26 @@ const App: React.FC = () => {
           const mockResult: any = {
             status: record.status,
             message: "Already Processed", // Add message for cached single result
-            rawData: { cached: true, synced: entry.synced },
-            cachedAt: entry.cachedAt,
-            cachedType: entry.cachedType
+            rawData: { cached: true } // Add cached metadata
           };
 
           if (entry.feature === 'verify') {
             mockResult.email = record.email;
             if (record.result) {
               mockResult.message = record.result.message;
-              mockResult.rawData = { ...record.result, cached: true, synced: entry.synced };
+              mockResult.rawData = { ...record.result, cached: true };
             }
           } else if (entry.feature === 'linkedin') {
             mockResult.linkedinUrl = record.linkedin_url;
-            mockResult.rawData = { ...record, cached: true, synced: entry.synced };
           } else {
             // Default / Enrich
             mockResult.email = record.email;
-            mockResult.rawData = { ...record, cached: true, synced: entry.synced };
           }
 
           setSingleResult(mockResult);
         }
       } else {
-        const mockResult: any = {
-          status: entry.status,
-          message: "Already Processed",
-          cachedAt: entry.cachedAt,
-          cachedType: entry.cachedType,
-          metadata: { cached: true, synced: entry.synced }
-        };
+        const mockResult: any = { status: entry.status, message: "Already Processed" }; // Add message for cached single result
         if (appMode === 'enrich') mockResult.email = entry.result;
         else if (appMode === 'linkedin') mockResult.linkedinUrl = entry.result;
         setSingleResult(mockResult);
@@ -1363,42 +1346,12 @@ const App: React.FC = () => {
 
     setIsProcessing(true);
     try {
-      // 1. Primary lookup by direct history_id
-      const { data: idResults, error: idError } = await supabase
+      const { data, error } = await supabase
         .from('api_sync_results')
         .select('*')
         .eq('history_id', currentHistoryId);
 
-      if (idError) throw idError;
-
-      let data = idResults || [];
-
-      // 2. Fallback for single search: Look by identifier if direct session match fails
-      if (data.length === 0 && inputMode === 'single' && session?.user?.id) {
-        console.log("No direct history sync found, attempting identifier fallback...");
-        let fallbackQuery = supabase
-          .from('api_sync_results')
-          .select('*')
-          .eq('user_id', session.user.id);
-
-        if (appMode === 'verify') {
-          fallbackQuery = fallbackQuery.ilike('email_used', singleEmail.trim());
-        } else {
-          // Support both name/company formats stored in api_sync_results
-          fallbackQuery = fallbackQuery
-            .ilike('prospect_name', singleName.trim())
-            .ilike('prospect_company', singleCompany.trim());
-        }
-
-        const { data: fallbackData } = await fallbackQuery
-          .order('created_at', { ascending: false })
-          .limit(1);
-
-        if (fallbackData && fallbackData.length > 0) {
-          console.log("Found sync result via identifier fallback", fallbackData[0].id);
-          data = fallbackData;
-        }
-      }
+      if (error) throw error;
 
       if (!data || data.length === 0) {
         alert("No API results found for this session.");
@@ -1898,7 +1851,7 @@ const App: React.FC = () => {
                           </div>
                         </div>
                       )}
-                      <button onClick={handleSingleAction} disabled={isProcessing} className={cn("w-full py-4 bg-violet-600 hover:bg-violet-500 text-white font-bold rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 text-base", isProcessing && (theme === 'dark' ? "bg-violet-900/50 text-violet-400/50" : "bg-violet-200 text-violet-600"))}>{isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : (appMode === 'enrich' ? 'Find Email' : appMode === 'linkedin' ? 'Find LinkedIn' : 'Verify Email')}</button>
+                      <button onClick={handleSingleAction} disabled={isProcessing} className="w-full py-4 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white font-bold rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 text-base">{isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : (appMode === 'enrich' ? 'Find Email' : appMode === 'linkedin' ? 'Find LinkedIn' : 'Verify Email')}</button>
                       {singleResult && (
                         <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className={`mt-4 p-4 rounded-2xl ${theme === 'dark' ? 'bg-violet-950/40 border-violet-800/40' : 'bg-white border-amber-100'} border flex flex-col items-center text-center`}>
                           <div className="flex flex-col items-center gap-2 w-full">
@@ -1908,7 +1861,7 @@ const App: React.FC = () => {
                           <div className="mt-2 flex flex-col items-center">
                             <span className={`text-[9px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1`}>Status</span>
                             <div className="flex flex-col gap-1">
-                              <div className={`inline-flex items-center justify-center gap-1.5 text-[9px] font-black uppercase tracking-[0.1em] px-4 py-1.5 rounded-full border shadow-sm min-w-[120px] ${singleResult.status === 'completed' || singleResult.status === 'deliverable' || singleResult.status === 'found' ? 'text-green-700 bg-green-100 border-green-200' : (singleResult.status === 'undeliverable' || singleResult.status === 'failed' ? 'text-rose-700 bg-rose-100 border-rose-200' : 'text-amber-700 bg-amber-100 border-amber-200')}`}>{singleResult.status === 'deliverable' ? 'VALID' : (singleResult.status === 'undeliverable' ? 'INVALID' : (singleResult.status || 'FAILED'))}</div>
+                              <div className={`inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-[0.1em] px-3 py-1 rounded-full border shadow-sm ${singleResult.status === 'completed' || singleResult.status === 'deliverable' || singleResult.status === 'found' ? 'text-green-700 bg-green-100 border-green-200' : (singleResult.status === 'undeliverable' || singleResult.status === 'failed' ? 'text-rose-700 bg-rose-100 border-rose-200' : 'text-amber-700 bg-amber-100 border-amber-200')}`}>{singleResult.status === 'deliverable' ? 'VALID' : (singleResult.status === 'undeliverable' ? 'INVALID' : (singleResult.status || 'FAILED'))}</div>
                               {singleResult.metadata?.cached && (
                                 <div className="flex flex-col items-center gap-1">
                                   <div className={`inline-flex items-center justify-center gap-1 text-[7px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border ${theme === 'dark' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' : 'bg-violet-50 text-violet-600 border-violet-200'}`}>
@@ -1955,13 +1908,13 @@ const App: React.FC = () => {
                   ) : (
                     <div><label className={`block text-[9px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1 ml-1`}>Email Column to Verify</label><select className={`w-full p-2 ${themeClasses.input} rounded-lg text-xs font-medium focus:ring-2 focus:ring-violet-500 outline-none transition-all appearance-none cursor-pointer`} value={mapping?.emailHeader || ''} onChange={(e) => { const val = e.target.value; setMapping(prev => ({ ...prev!, emailHeader: val })); setRows(prevRows => prevRows.map(r => ({ ...r, email: String(r.originalData[val] || '').trim() }))); }} disabled={isProcessing}><option value="">Select Column</option>{headers.map(h => <option key={h} value={h} className={theme === 'dark' ? "bg-[#0f0720]" : "bg-white"}>{h}</option>)}</select></div>
                   )}
-                  <button onClick={startProcessing} disabled={isProcessing || !mapping} className={cn("w-full py-2.5 mt-2 bg-violet-600 hover:bg-violet-500 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-xl text-xs", (isProcessing || !mapping) && (theme === 'dark' ? "bg-violet-900/50 text-violet-400/50" : "bg-violet-200 text-violet-600"))}>{isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : (appMode === 'enrich' ? <Mail className="w-4 h-4" /> : appMode === 'linkedin' ? <Linkedin className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />)}{isProcessing ? 'Processing...' : (appMode === 'enrich' ? 'Run Enrichment' : appMode === 'linkedin' ? 'Find Profiles' : 'Run Verification')}</button>
+                  <button onClick={startProcessing} disabled={isProcessing || !mapping} className="w-full py-2.5 mt-2 bg-violet-600 hover:bg-violet-500 disabled:bg-violet-900/50 disabled:text-violet-400/50 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-xl text-xs">{isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : (appMode === 'enrich' ? <Mail className="w-4 h-4" /> : appMode === 'linkedin' ? <Linkedin className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />)}{isProcessing ? 'Processing...' : (appMode === 'enrich' ? 'Run Enrichment' : appMode === 'linkedin' ? 'Find Profiles' : 'Run Verification')}</button>
                 </div>
               </div>
               <div className={`${themeClasses.card} p-6 rounded-3xl`}>
                 <h3 className={`text-sm font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'} mb-2 flex items-center gap-2`}><BarChart2 className="w-4 h-4 text-emerald-500" /> Analytics</h3>
                 {stats.length > 0 ? (
-                  <div className="h-40 mt-1"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={stats} innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value">{stats.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />)}</Pie><Tooltip contentStyle={{ fontSize: '12px', fontWeight: 'bold', backgroundColor: theme === 'dark' ? '#1e1b4b' : '#fff', border: theme === 'dark' ? '1px solid rgba(139, 92, 246, 0.3)' : '1px solid #e2e8f0', borderRadius: '10px', color: theme === 'dark' ? '#fff' : '#000' }} itemStyle={{ color: theme === 'dark' ? '#fff' : '#000' }} /><Legend iconSize={8} wrapperStyle={{ fontSize: '9px', color: theme === 'dark' ? '#a78bfa' : '#475569' }} /></PieChart></ResponsiveContainer></div>
+                  <div className="h-40 mt-1"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={stats} innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value">{stats.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />)}</Pie><Tooltip contentStyle={{ fontSize: '12px', fontWeight: 'bold', backgroundColor: theme === 'dark' ? '#1e1b4b' : '#fff', border: theme === 'dark' ? '1px solid rgba(139, 92, 246, 0.3)' : '1px solid #e2e8f0', borderRadius: '10px' }} /><Legend iconSize={8} wrapperStyle={{ fontSize: '9px' }} /></PieChart></ResponsiveContainer></div>
                 ) : <div className={`text-center py-10 ${theme === 'dark' ? 'text-violet-400/30' : 'text-slate-400'} text-[9px] font-bold uppercase tracking-widest`}>Awaiting Data</div>}
                 {rows.some(r => r.status !== 'pending' && r.status !== 'processing') && (
                   <div className="flex flex-col gap-2 mt-4">
