@@ -173,7 +173,7 @@ const App: React.FC = () => {
     const [singleName, setSingleName] = useState('');
     const [singleCompany, setSingleCompany] = useState('');
     const [singleEmail, setSingleEmail] = useState('');
-    const [singleResult, setSingleResult] = useState<{ email?: string; linkedinUrl?: string; status?: string; message?: string; rawData?: any; metadata?: any; cachedAt?: string; cachedType?: string } | null>(null);
+    const [singleResult, setSingleResult] = useState<{ email?: string; linkedinUrl?: string; status?: string; message?: string; rawData?: any; metadata?: any; cachedAt?: string; cachedType?: string; originalHistoryId?: string } | null>(null);
 
     // Listen for auth state changes
     useEffect(() => {
@@ -810,7 +810,8 @@ const App: React.FC = () => {
                     rawData: existing.result,
                     metadata: { cached: true },
                     cachedAt: existing.created_at,
-                    cachedType: (existing as any).historyType
+                    cachedType: (existing as any).historyType,
+                    originalHistoryId: existing.history_id
                 });
 
                 const cachedHistoryEntry: HistoryEntry = {
@@ -1339,17 +1340,27 @@ const App: React.FC = () => {
 
     const handleGetApiResults = async () => {
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        if (!currentHistoryId || !uuidRegex.test(currentHistoryId)) {
+
+        const effectiveHistoryId = (inputMode === 'single' && singleResult?.originalHistoryId)
+            ? singleResult.originalHistoryId
+            : currentHistoryId;
+
+        if (!effectiveHistoryId || !uuidRegex.test(effectiveHistoryId)) {
             alert("Invalid session ID or historical entry. Search for new results or click a synced entry from history.");
             return;
         }
 
         setIsProcessing(true);
         try {
-            const { data, error } = await supabase
-                .from('api_sync_results')
-                .select('*')
-                .eq('history_id', currentHistoryId);
+            let query = supabase.from('api_sync_results').select('*').eq('history_id', effectiveHistoryId);
+
+            // If it's a single search from a bulk cache, filter to just this record
+            if (inputMode === 'single' && singleResult?.originalHistoryId) {
+                if (singleName) query = query.ilike('prospect_name', singleName.trim());
+                if (singleCompany) query = query.ilike('prospect_company', singleCompany.trim());
+            }
+
+            const { data, error } = await query;
 
             if (error) throw error;
 
