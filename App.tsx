@@ -358,7 +358,8 @@ const App: React.FC = () => {
             name: item.name ?? item.originalData?.[entry.mapping?.nameHeader || ''] ?? null,
             company: item.company ?? item.originalData?.[entry.mapping?.companyHeader || ''] ?? null,
             email: item.email,
-            status: item.status
+            status: item.status,
+            result: item.metadata || { cached: item.metadata?.cached } // Persist metadata
           }));
           const { error } = await supabase.from('prospect_results').insert(prospectRows);
           if (error) console.error("Failed to save prospect results", error);
@@ -386,7 +387,8 @@ const App: React.FC = () => {
             name: item.name || item.originalData?.[entry.mapping?.nameHeader || ''] || undefined,
             company: item.company || item.originalData?.[entry.mapping?.companyHeader || ''] || undefined,
             linkedin_url: item.linkedinUrl,
-            status: item.status
+            status: item.status,
+            result: item.metadata || { cached: item.metadata?.cached } // Persist metadata
           }));
           const { error } = await supabase.from('linkedin_results').insert(linkedinRows);
           if (error) console.error("Failed to save linkedin results", error);
@@ -990,7 +992,7 @@ const App: React.FC = () => {
             linkedinUrl: r.linkedin_url,
             status: r.status as any,
             originalData: { ...r },
-            metadata: { ...r } // Don't force cached: true
+            metadata: r.result || { ...r } // Load metadata from result column
           }));
         } else {
           reconstructedRows = results.map((p: any) => ({
@@ -1000,7 +1002,7 @@ const App: React.FC = () => {
             email: p.email,
             status: p.status as any,
             originalData: { ...p },
-            metadata: { ...p } // Don't force cached: true
+            metadata: p.result || { ...p } // Load metadata from result column
           }));
         }
 
