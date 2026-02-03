@@ -358,8 +358,7 @@ const App: React.FC = () => {
             name: item.name ?? item.originalData?.[entry.mapping?.nameHeader || ''] ?? null,
             company: item.company ?? item.originalData?.[entry.mapping?.companyHeader || ''] ?? null,
             email: item.email,
-            status: item.status,
-            result: item.metadata || { cached: item.metadata?.cached } // Persist metadata
+            status: item.status
           }));
           const { error } = await supabase.from('prospect_results').insert(prospectRows);
           if (error) console.error("Failed to save prospect results", error);
@@ -387,8 +386,7 @@ const App: React.FC = () => {
             name: item.name || item.originalData?.[entry.mapping?.nameHeader || ''] || undefined,
             company: item.company || item.originalData?.[entry.mapping?.companyHeader || ''] || undefined,
             linkedin_url: item.linkedinUrl,
-            status: item.status,
-            result: item.metadata || { cached: item.metadata?.cached } // Persist metadata
+            status: item.status
           }));
           const { error } = await supabase.from('linkedin_results').insert(linkedinRows);
           if (error) console.error("Failed to save linkedin results", error);
@@ -992,7 +990,7 @@ const App: React.FC = () => {
             linkedinUrl: r.linkedin_url,
             status: r.status as any,
             originalData: { ...r },
-            metadata: r.result || { ...r } // Load metadata from result column
+            metadata: { ...r } // Don't force cached: true
           }));
         } else {
           reconstructedRows = results.map((p: any) => ({
@@ -1002,7 +1000,7 @@ const App: React.FC = () => {
             email: p.email,
             status: p.status as any,
             originalData: { ...p },
-            metadata: p.result || { ...p } // Load metadata from result column
+            metadata: { ...p } // Don't force cached: true
           }));
         }
 
@@ -1177,7 +1175,11 @@ const App: React.FC = () => {
       try {
         const jsonData = await responseClone.json();
         const processedData = processApiData(jsonData);
-        setApiResponseData(processedData);
+        // Inject Run Type for immediate display
+        const displayData = Array.isArray(processedData)
+          ? processedData.map(item => ({ "Run Type": "Bulk Upload", ...item }))
+          : { "Run Type": "Bulk Upload", ...processedData };
+        setApiResponseData(displayData);
         setShowApiResultModal(true);
 
         // Save to Supabase api_sync_results (individual rows)
@@ -1281,7 +1283,11 @@ const App: React.FC = () => {
       try {
         const jsonData = await responseClone.json();
         const processedData = processApiData(jsonData);
-        setApiResponseData(processedData);
+        // Inject Run Type for immediate display
+        const displayData = Array.isArray(processedData)
+          ? processedData.map(item => ({ "Run Type": "Single Try", ...item }))
+          : { "Run Type": "Single Try", ...processedData };
+        setApiResponseData(displayData);
         setShowApiResultModal(true);
 
         // Save to Supabase api_sync_results (individual rows)
@@ -1396,10 +1402,19 @@ const App: React.FC = () => {
         return;
       }
 
-      // Filter out internal metadata columns for display
+      // Fetch the history type to determine "Run Type"
+      // Use the history_id from the first row as they should all be part of the same session
+      const targetHistoryId = data[0].history_id;
+      const { data: hData } = await supabase.from('history').select('type').eq('id', targetHistoryId).single();
+      const runType = hData?.type === 'bulk' ? 'Bulk Upload' : 'Single Try';
+
+      // Filter out internal metadata columns for display and inject Run Type
       const filteredData = data.map(item => {
         const { id, user_id, history_id, feature, created_at, ...rest } = item;
-        return rest;
+        return {
+          "Run Type": runType,
+          ...rest
+        };
       });
 
       setApiResponseData(filteredData);
@@ -1734,10 +1749,18 @@ const App: React.FC = () => {
                             <div className="flex flex-col gap-1 mt-1">
                               <div className="flex items-center gap-2">
                                 <p className={`text-[10px] font-mono ${entry.status.toLowerCase().includes('fail') ? 'text-rose-500' : 'text-emerald-500'} truncate`}>{formatHistoryResult(entry.result)}</p>
+                                {entry.hasCached && (
+                                  <span className={`text-[7px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border transition-all ${theme === 'dark' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' : 'bg-violet-50 text-violet-600 border-violet-200'}`}>Already Processed</span>
+                                )}
                                 {entry.synced && (
                                   <span className={`text-[7px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border transition-all ${theme === 'dark' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-200'}`}>Synced</span>
                                 )}
                               </div>
+                              {entry.hasCached && entry.cachedAt && (
+                                <span className={`text-[8px] font-medium opacity-50 ${theme === 'dark' ? 'text-violet-300' : 'text-slate-500'}`}>
+                                  Ran on {new Date(entry.cachedAt).toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}  {entry.cachedType ? `via ${entry.cachedType === 'bulk' ? 'Bulk Upload' : 'Single Try'}` : ''}
+                                </span>
+                              )}
                             </div>
                           </div>
                         ))
