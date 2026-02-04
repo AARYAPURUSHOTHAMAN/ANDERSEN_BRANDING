@@ -1154,6 +1154,7 @@ const App: React.FC = () => {
                 if (entry.feature === 'verify') {
                     reconstructedRows = results.map((r: any) => {
                         const original = r.result || {};
+                        const meta = { ...original, ...(r.metadata || {}) };
                         return {
                             id: r.id,
                             name: original.name || '',
@@ -1161,6 +1162,7 @@ const App: React.FC = () => {
                             email: r.email,
                             status: r.status as any,
                             originalData: original,
+<<<<<<< HEAD
                             metadata: { ...original, cached: !!original.cached },
                             cachedAt: original.cachedAt,
                             cachedType: original.cachedType,
@@ -1193,6 +1195,49 @@ const App: React.FC = () => {
                         cachedType: p.cached_type,
                         synced: p.synced
                     }));
+=======
+                            metadata: meta,
+                            // Lift metadata fields to top-level for display logic
+                            cachedAt: meta.cachedAt,
+                            cachedType: meta.cachedType,
+                            synced: meta.synced
+                        };
+                    });
+                } else if (entry.feature === 'linkedin') {
+                    reconstructedRows = results.map((r: any) => {
+                        const meta = r.metadata || { ...r };
+                        return {
+                            id: r.id,
+                            name: r.name || '',
+                            company: r.company || '',
+                            linkedinUrl: r.linkedin_url,
+                            status: r.status as any,
+                            originalData: { ...r },
+                            metadata: meta,
+                            // Lift metadata fields
+                            cachedAt: meta.cachedAt,
+                            cachedType: meta.cachedType,
+                            synced: meta.synced
+                        };
+                    });
+                } else {
+                    reconstructedRows = results.map((p: any) => {
+                        const meta = p.metadata || { ...p };
+                        return {
+                            id: p.id,
+                            name: p.name || '',
+                            company: p.company || '',
+                            email: p.email,
+                            status: p.status as any,
+                            originalData: { ...p },
+                            metadata: meta,
+                            // Lift metadata fields
+                            cachedAt: meta.cachedAt,
+                            cachedType: meta.cachedType,
+                            synced: meta.synced
+                        };
+                    });
+>>>>>>> c0914f7721b96273c216c0b527b40b4bd0693644
                 }
 
                 setRows(reconstructedRows);
