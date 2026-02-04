@@ -204,7 +204,7 @@ const App: React.FC = () => {
                 .select('*')
                 .eq('user_id', userId)
                 .order('created_at', { ascending: false })
-                .limit(200);
+                .limit(50);
 
             if (error) throw error;
 
@@ -358,8 +358,7 @@ const App: React.FC = () => {
                         name: item.name ?? item.originalData?.[entry.mapping?.nameHeader || ''] ?? null,
                         company: item.company ?? item.originalData?.[entry.mapping?.companyHeader || ''] ?? null,
                         email: item.email,
-                        status: item.status,
-                        result: item.metadata || {}
+                        status: item.status
                     }));
                     const { error } = await supabase.from('prospect_results').insert(prospectRows);
                     if (error) console.error("Failed to save prospect results", error);
@@ -387,8 +386,7 @@ const App: React.FC = () => {
                         name: item.name || item.originalData?.[entry.mapping?.nameHeader || ''] || undefined,
                         company: item.company || item.originalData?.[entry.mapping?.companyHeader || ''] || undefined,
                         linkedin_url: item.linkedinUrl,
-                        status: item.status,
-                        result: item.metadata || {}
+                        status: item.status
                     }));
                     const { error } = await supabase.from('linkedin_results').insert(linkedinRows);
                     if (error) console.error("Failed to save linkedin results", error);
@@ -727,7 +725,7 @@ const App: React.FC = () => {
             if (isDuplicate) return prev;
             return {
                 ...prev,
-                [appMode]: [bulkEntry, ...existingHistory].slice(0, 100)
+                [appMode]: [bulkEntry, ...existingHistory].slice(0, 15)
             };
         });
 
@@ -811,11 +809,6 @@ const App: React.FC = () => {
         if (supabaseId) bulkEntry.id = supabaseId;
         setCurrentHistoryId(bulkEntry.id);
 
-        setHistory(prev => ({
-            ...prev,
-            [appMode]: [bulkEntry, ...prev[appMode]].slice(0, 100)
-        }));
-
         setIsProcessing(false);
     };
 
@@ -878,7 +871,7 @@ const App: React.FC = () => {
 
             setHistory(prev => ({
                 ...prev,
-                [appMode]: [newHistoryEntry, ...prev[appMode]].slice(0, 100)
+                [appMode]: [newHistoryEntry, ...prev[appMode]].slice(0, 15)
             }));
         } catch (err) {
             setError("Retry failed due to an unexpected error.");
@@ -1100,7 +1093,7 @@ const App: React.FC = () => {
                     Math.abs(e.timestamp - newHistoryEntry.timestamp) < 2000
                 );
                 if (isDuplicate) return prev;
-                return { ...prev, [appMode]: [newHistoryEntry, ...existingHistory].slice(0, 100) };
+                return { ...prev, [appMode]: [newHistoryEntry, ...existingHistory].slice(0, 15) };
             });
 
         } catch (err) {
@@ -1162,7 +1155,7 @@ const App: React.FC = () => {
                         linkedinUrl: r.linkedin_url,
                         status: r.status as any,
                         originalData: { ...r },
-                        metadata: r.result || {} // Use stored result metadata
+                        metadata: { ...r } // Don't force cached: true
                     }));
                 } else {
                     reconstructedRows = results.map((p: any) => ({
@@ -1172,7 +1165,7 @@ const App: React.FC = () => {
                         email: p.email,
                         status: p.status as any,
                         originalData: { ...p },
-                        metadata: p.result || {} // Use stored result metadata
+                        metadata: { ...p } // Don't force cached: true
                     }));
                 }
 
