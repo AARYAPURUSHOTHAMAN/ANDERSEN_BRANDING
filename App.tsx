@@ -204,7 +204,7 @@ const App: React.FC = () => {
                 .select('*')
                 .eq('user_id', userId)
                 .order('created_at', { ascending: false })
-                .limit(50);
+                .limit(200);
 
             if (error) throw error;
 
@@ -358,7 +358,10 @@ const App: React.FC = () => {
                         name: item.name ?? item.originalData?.[entry.mapping?.nameHeader || ''] ?? null,
                         company: item.company ?? item.originalData?.[entry.mapping?.companyHeader || ''] ?? null,
                         email: item.email,
-                        status: item.status
+                        status: item.status,
+                        cached_at: item.cachedAt,
+                        cached_type: item.cachedType,
+                        synced: item.synced || (item.metadata?.synced)
                     }));
                     const { error } = await supabase.from('prospect_results').insert(prospectRows);
                     if (error) console.error("Failed to save prospect results", error);
@@ -371,7 +374,13 @@ const App: React.FC = () => {
                             user_id: session.user.id,
                             email: item.email!,
                             status: item.status,
-                            result: item.metadata || item // Store API raw data if available, else fallback to item
+                            result: {
+                                ...(item.metadata || item),
+                                cached: !!item.cachedAt,
+                                cachedAt: item.cachedAt,
+                                cachedType: item.cachedType,
+                                synced: item.synced || item.metadata?.synced
+                            }
                         }));
 
                     if (verifyRows.length > 0) {
@@ -386,7 +395,10 @@ const App: React.FC = () => {
                         name: item.name || item.originalData?.[entry.mapping?.nameHeader || ''] || undefined,
                         company: item.company || item.originalData?.[entry.mapping?.companyHeader || ''] || undefined,
                         linkedin_url: item.linkedinUrl,
-                        status: item.status
+                        status: item.status,
+                        cached_at: item.cachedAt,
+                        cached_type: item.cachedType,
+                        synced: item.synced || (item.metadata?.synced)
                     }));
                     const { error } = await supabase.from('linkedin_results').insert(linkedinRows);
                     if (error) console.error("Failed to save linkedin results", error);
@@ -725,7 +737,7 @@ const App: React.FC = () => {
             if (isDuplicate) return prev;
             return {
                 ...prev,
-                [appMode]: [bulkEntry, ...existingHistory].slice(0, 15)
+                [appMode]: [bulkEntry, ...existingHistory].slice(0, 100)
             };
         });
 
@@ -809,6 +821,11 @@ const App: React.FC = () => {
         if (supabaseId) bulkEntry.id = supabaseId;
         setCurrentHistoryId(bulkEntry.id);
 
+        setHistory(prev => ({
+            ...prev,
+            [appMode]: [bulkEntry, ...prev[appMode]].slice(0, 100)
+        }));
+
         setIsProcessing(false);
     };
 
@@ -871,7 +888,7 @@ const App: React.FC = () => {
 
             setHistory(prev => ({
                 ...prev,
-                [appMode]: [newHistoryEntry, ...prev[appMode]].slice(0, 15)
+                [appMode]: [newHistoryEntry, ...prev[appMode]].slice(0, 100)
             }));
         } catch (err) {
             setError("Retry failed due to an unexpected error.");
@@ -1093,7 +1110,7 @@ const App: React.FC = () => {
                     Math.abs(e.timestamp - newHistoryEntry.timestamp) < 2000
                 );
                 if (isDuplicate) return prev;
-                return { ...prev, [appMode]: [newHistoryEntry, ...existingHistory].slice(0, 15) };
+                return { ...prev, [appMode]: [newHistoryEntry, ...existingHistory].slice(0, 100) };
             });
 
         } catch (err) {
@@ -1144,7 +1161,10 @@ const App: React.FC = () => {
                             email: r.email,
                             status: r.status as any,
                             originalData: original,
-                            metadata: { ...original } // Don't force cached: true
+                            metadata: { ...original, cached: !!original.cached },
+                            cachedAt: original.cachedAt,
+                            cachedType: original.cachedType,
+                            synced: original.synced
                         };
                     });
                 } else if (entry.feature === 'linkedin') {
@@ -1155,7 +1175,10 @@ const App: React.FC = () => {
                         linkedinUrl: r.linkedin_url,
                         status: r.status as any,
                         originalData: { ...r },
-                        metadata: { ...r } // Don't force cached: true
+                        metadata: { ...r, cached: !!r.cached_at },
+                        cachedAt: r.cached_at,
+                        cachedType: r.cached_type,
+                        synced: r.synced
                     }));
                 } else {
                     reconstructedRows = results.map((p: any) => ({
@@ -1165,7 +1188,10 @@ const App: React.FC = () => {
                         email: p.email,
                         status: p.status as any,
                         originalData: { ...p },
-                        metadata: { ...p } // Don't force cached: true
+                        metadata: { ...p, cached: !!p.cached_at },
+                        cachedAt: p.cached_at,
+                        cachedType: p.cached_type,
+                        synced: p.synced
                     }));
                 }
 
