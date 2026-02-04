@@ -33,7 +33,8 @@ import {
     Info,
     X,
     Settings,
-    Webhook
+    Webhook,
+    RotateCw
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -627,7 +628,8 @@ const App: React.FC = () => {
                     resultRowUpdate = {
                         email: existing.email,
                         status: existing.status as any,
-                        metadata: { ...existing.result, cached: true },
+                        metadata: { ...existing.result, cached: true, synced: (existing as any).globallySynced },
+                        synced: (existing as any).globallySynced,
                         cachedAt: existing.created_at,
                         cachedType: (existing as any).historyType
                     };
@@ -635,14 +637,16 @@ const App: React.FC = () => {
                     resultRowUpdate = {
                         linkedinUrl: existing.linkedin_url,
                         status: existing.status as any,
-                        metadata: { cached: true },
+                        metadata: { cached: true, synced: (existing as any).globallySynced },
+                        synced: (existing as any).globallySynced,
                         cachedAt: existing.created_at,
                         cachedType: (existing as any).historyType
                     };
                 } else if (appMode === 'verify') {
                     resultRowUpdate = {
                         status: existing.status as any,
-                        metadata: { ...existing.rawData, cached: true },
+                        metadata: { ...existing.rawData, cached: true, synced: (existing as any).globallySynced },
+                        synced: (existing as any).globallySynced,
                         cachedAt: existing.created_at,
                         cachedType: (existing as any).historyType
                     };
@@ -728,6 +732,154 @@ const App: React.FC = () => {
         setIsProcessing(false);
     };
 
+    const handleRetryFailed = async () => {
+        if (!mapping || isProcessing) return;
+        setIsProcessing(true);
+
+        const failedIndices = rows
+            .map((r, idx) => ({ status: r.status, idx }))
+            .filter(({ status }) => status === 'failed' || status === 'undeliverable' || status === 'not_found')
+            .map(({ idx }) => idx);
+
+        if (failedIndices.length === 0) {
+            setIsProcessing(false);
+            return;
+        }
+
+        const updatedRows = [...rows];
+
+        for (const i of failedIndices) {
+            updatedRows[i] = { ...updatedRows[i], status: appMode === 'linkedin' ? 'searching' : 'processing' };
+            setRows([...updatedRows]);
+
+            const row = updatedRows[i];
+            let resultRowUpdate: Partial<ProspectRow> = {};
+
+            try {
+                if (appMode === 'enrich') {
+                    const result = await findEmail(row.name, row.company);
+                    resultRowUpdate = {
+                        email: result.email,
+                        status: (result.success ? 'completed' : (result.message === 'No email found' ? 'not_found' : 'failed')) as any,
+                        error: result.success ? undefined : result.message
+                    };
+                } else if (appMode === 'linkedin') {
+                    const result = await findLinkedInUrl(row.name, row.company);
+                    resultRowUpdate = {
+                        linkedinUrl: result.url,
+                        status: (result.success ? 'found' : 'not_found') as any,
+                        error: result.success ? undefined : result.message
+                    };
+                } else if (appMode === 'verify') {
+                    const emailToVerify = row.email;
+                    if (!emailToVerify) {
+                        resultRowUpdate = { status: 'failed', error: 'No email found' };
+                    } else {
+                        const result = await verifyEmail(emailToVerify);
+                        resultRowUpdate = {
+                            status: (result.success ? (result.status as any) : 'failed') as any,
+                            error: result.success ? undefined : result.message,
+                            metadata: result.rawData
+                        };
+                    }
+                }
+            } catch (err) {
+                resultRowUpdate = { status: 'failed', error: 'Retry failed' };
+            }
+
+            updatedRows[i] = { ...updatedRows[i], ...resultRowUpdate };
+            setRows([...updatedRows]);
+            await new Promise(res => setTimeout(res, 300));
+        }
+
+        // Save updated results to Supabase (creating a new history record for the retry session)
+        const bulkEntry: HistoryEntry = {
+            id: `bulk-retry-${Date.now()}`,
+            type: 'bulk',
+            input: `Retry: ${file?.name || 'Bulk Session'}`,
+            result: `${failedIndices.length} Failed records retried`,
+            status: 'completed',
+            timestamp: Date.now(),
+            data: [...updatedRows],
+            headers: [...headers],
+            mapping: mapping ? { ...mapping } : undefined
+        };
+
+        const supabaseId = await saveToSupabase(bulkEntry, appMode);
+        if (supabaseId) bulkEntry.id = supabaseId;
+        setCurrentHistoryId(bulkEntry.id);
+
+        setIsProcessing(false);
+    };
+
+    const handleSingleRetry = async () => {
+        if (!singleName && !singleCompany && !singleEmail) return;
+        setIsProcessing(true);
+        setSingleResult(null);
+        setError(null);
+
+        let resultPayload: any;
+        try {
+            if (appMode === 'enrich') {
+                resultPayload = await findEmail(singleName, singleCompany);
+                setSingleResult({
+                    email: resultPayload.email,
+                    status: resultPayload.success ? 'completed' : 'failed',
+                    message: resultPayload.message,
+                    metadata: { retry: true }
+                });
+            } else if (appMode === 'linkedin') {
+                resultPayload = await findLinkedInUrl(singleName, singleCompany);
+                setSingleResult({
+                    linkedinUrl: resultPayload.url,
+                    status: resultPayload.success ? 'found' : 'failed',
+                    message: resultPayload.message,
+                    metadata: { retry: true }
+                });
+            } else if (appMode === 'verify') {
+                resultPayload = await verifyEmail(singleEmail);
+                setSingleResult({
+                    status: resultPayload.success ? resultPayload.status : 'failed',
+                    message: resultPayload.message,
+                    rawData: resultPayload.rawData,
+                    metadata: { retry: true }
+                });
+            }
+
+            const newHistoryEntry: HistoryEntry = {
+                id: `single-retry-${Date.now()}`,
+                type: 'single',
+                input: `Retry: ${appMode === 'verify' ? singleEmail : `${singleName} @ ${singleCompany}`}`,
+                result: resultPayload.email || resultPayload.url || resultPayload.status || 'Failed',
+                status: resultPayload.status || (resultPayload.success ? (appMode === 'linkedin' ? 'found' : 'completed') : 'failed'),
+                timestamp: Date.now(),
+                data: [{
+                    id: `retry-row-${Date.now()}`,
+                    name: singleName,
+                    company: singleCompany,
+                    email: appMode === 'enrich' ? resultPayload.email : (appMode === 'verify' ? singleEmail : undefined),
+                    linkedinUrl: appMode === 'linkedin' ? resultPayload.url : undefined,
+                    status: resultPayload.status || (resultPayload.success ? 'completed' : 'failed'),
+                    originalData: {},
+                    metadata: { ...resultPayload.rawData, retry: true }
+                }]
+            };
+
+            const supabaseId = await saveToSupabase(newHistoryEntry, appMode);
+            if (supabaseId) newHistoryEntry.id = supabaseId;
+            setCurrentHistoryId(newHistoryEntry.id);
+
+            setHistory(prev => ({
+                ...prev,
+                [appMode]: [newHistoryEntry, ...prev[appMode]].slice(0, 15)
+            }));
+        } catch (err) {
+            setError("Retry failed due to an unexpected error.");
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
     const checkExistingResult = async (mode: string, input1: string, input2?: string) => {
         if (!session?.user?.id) return null;
 
@@ -736,7 +888,6 @@ const App: React.FC = () => {
             if (mode === 'enrich') {
                 query = supabase.from('prospect_results')
                     .select('*')
-                    .eq('user_id', session.user.id)
                     .ilike('name', input1.trim())
                     .ilike('company', input2?.trim() || '')
                     .order('created_at', { ascending: true }) // Order by oldest first
@@ -746,14 +897,12 @@ const App: React.FC = () => {
             } else if (mode === 'verify') {
                 query = supabase.from('verification_results')
                     .select('*')
-                    .eq('user_id', session.user.id)
                     .ilike('email', input1.trim())
                     .order('created_at', { ascending: true })
                     .limit(50);
             } else if (mode === 'linkedin') {
                 query = supabase.from('linkedin_results')
                     .select('*')
-                    .eq('user_id', session.user.id)
                     .ilike('name', input1.trim())
                     .ilike('company', input2?.trim() || '')
                     .order('created_at', { ascending: true })
@@ -783,6 +932,26 @@ const App: React.FC = () => {
                     (result as any).historyType = cachedTypeFromData || hData.type;
                 }
             }
+
+            // --- Global Sync Check ---
+            // If we found a result, check if it was ever synced to the API endpoint by ANY user
+            if (result) {
+                let syncQuery = supabase.from('api_sync_results').select('id').limit(1);
+                if (mode === 'enrich' || mode === 'linkedin') {
+                    syncQuery = syncQuery
+                        .ilike('prospect_name', input1.trim())
+                        .ilike('prospect_company', input2?.trim() || '');
+                } else if (mode === 'verify') {
+                    syncQuery = syncQuery.ilike('email_used', input1.trim());
+                }
+
+                const { data: syncData } = await syncQuery;
+                if (syncData && syncData.length > 0) {
+                    (result as any).globallySynced = true;
+                }
+            }
+            // -------------------------
+
             return result || null;
         } catch (err) {
             console.error("Cache lookup failed", err);
@@ -808,7 +977,7 @@ const App: React.FC = () => {
                     status: existing.status,
                     message: "Already Processed",
                     rawData: existing.result,
-                    metadata: { cached: true },
+                    metadata: { cached: true, synced: (existing as any).globallySynced },
                     cachedAt: existing.created_at,
                     cachedType: (existing as any).historyType
                 });
@@ -828,9 +997,11 @@ const App: React.FC = () => {
                         linkedinUrl: existing.linkedin_url,
                         status: existing.status,
                         originalData: {},
-                        metadata: { ...existing.result, cached: true } // Ensure metadata includes cached status
+                        synced: (existing as any).globallySynced,
+                        metadata: { ...existing.result, cached: true, synced: (existing as any).globallySynced } // Ensure metadata includes cached and synced status
                     }],
                     hasCached: true,
+                    synced: (existing as any).globallySynced,
                     cachedAt: existing.created_at,
                     cachedType: (existing as any).historyType
                 };
@@ -1339,22 +1510,59 @@ const App: React.FC = () => {
 
     const handleGetApiResults = async () => {
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        if (!currentHistoryId || !uuidRegex.test(currentHistoryId)) {
-            alert("Invalid session ID or historical entry. Search for new results or click a synced entry from history.");
-            return;
-        }
+        const isHistoryIdValid = currentHistoryId && uuidRegex.test(currentHistoryId);
 
         setIsProcessing(true);
         try {
-            const { data, error } = await supabase
-                .from('api_sync_results')
-                .select('*')
-                .eq('history_id', currentHistoryId);
+            let data: any[] | null = null;
+            let error: any = null;
+
+            // 1. Try fetching by current history_id first
+            if (isHistoryIdValid) {
+                const result = await supabase
+                    .from('api_sync_results')
+                    .select('*')
+                    .eq('history_id', currentHistoryId);
+                data = result.data;
+                error = result.error;
+            }
+
+            // 2. Global Fallback: If no results by history_id, search by input values (Global Sync Lookup)
+            if (!data || data.length === 0) {
+                let globalQuery = supabase.from('api_sync_results').select('*');
+
+                if (inputMode === 'single') {
+                    if (appMode === 'verify') {
+                        globalQuery = globalQuery.ilike('email_used', singleEmail.trim());
+                    } else {
+                        globalQuery = globalQuery
+                            .ilike('prospect_name', singleName.trim())
+                            .ilike('prospect_company', singleCompany.trim());
+                    }
+                } else {
+                    // For bulk, filter for results matching any row in the current list
+                    const names = rows.map(r => r.name.trim()).filter(Boolean);
+                    const companies = rows.map(r => r.company.trim()).filter(Boolean);
+                    const emails = rows.map(r => r.email?.trim()).filter(Boolean);
+
+                    if (appMode === 'verify') {
+                        if (emails.length > 0) globalQuery = globalQuery.in('email_used', emails);
+                        else { setIsProcessing(false); alert("No data to match."); return; }
+                    } else {
+                        if (names.length > 0) globalQuery = globalQuery.in('prospect_name', names).in('prospect_company', companies);
+                        else { setIsProcessing(false); alert("No data to match."); return; }
+                    }
+                }
+
+                const result = await globalQuery;
+                data = result.data;
+                error = result.error;
+            }
 
             if (error) throw error;
 
             if (!data || data.length === 0) {
-                alert("No API results found for this session.");
+                alert("No API results found for this entry or session.");
                 return;
             }
 
@@ -1368,7 +1576,7 @@ const App: React.FC = () => {
             setShowApiResultModal(true);
         } catch (err) {
             console.error("Failed to fetch API results:", err);
-            alert("Failed to fetch API results from history.");
+            alert("Failed to fetch API results.");
         } finally {
             setIsProcessing(false);
         }
@@ -1861,12 +2069,29 @@ const App: React.FC = () => {
                                                     <div className="mt-2 flex flex-col items-center">
                                                         <span className={`text-[9px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1`}>Status</span>
                                                         <div className="flex flex-col gap-1">
-                                                            <div className={`inline-flex items-center justify-center gap-1 text-[9px] font-black uppercase tracking-[0.1em] px-3 py-1 rounded-full border shadow-sm min-w-[120px] ${singleResult.status === 'completed' || singleResult.status === 'deliverable' || singleResult.status === 'found' ? 'text-green-700 bg-green-100 border-green-200' : (singleResult.status === 'undeliverable' || singleResult.status === 'failed' ? 'text-rose-700 bg-rose-100 border-rose-200' : 'text-amber-700 bg-amber-100 border-amber-200')}`}>{singleResult.status === 'deliverable' ? 'VALID' : (singleResult.status === 'undeliverable' ? 'INVALID' : (singleResult.status || 'FAILED'))}</div>
+                                                            <div className="flex items-center gap-2">
+                                                                <div className={`inline-flex items-center justify-center gap-1 text-[9px] font-black uppercase tracking-[0.1em] px-3 py-1 rounded-full border shadow-sm min-w-[120px] ${singleResult.status === 'completed' || singleResult.status === 'deliverable' || singleResult.status === 'found' ? 'text-green-700 bg-green-100 border-green-200' : (singleResult.status === 'undeliverable' || singleResult.status === 'failed' ? 'text-rose-700 bg-rose-100 border-rose-200' : 'text-amber-700 bg-amber-100 border-amber-200')}`}>{singleResult.status === 'deliverable' ? 'VALID' : (singleResult.status === 'undeliverable' ? 'INVALID' : (singleResult.status || 'FAILED'))}</div>
+                                                                {(singleResult.status === 'failed' || singleResult.status === 'undeliverable' || singleResult.status === 'not_found') && (
+                                                                    <button
+                                                                        onClick={handleSingleRetry}
+                                                                        disabled={isProcessing}
+                                                                        className={`p-1.5 rounded-lg transition-all ${theme === 'dark' ? 'bg-violet-900/40 hover:bg-violet-900/60 text-violet-400' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'} disabled:opacity-50`}
+                                                                        title="Retry fresh API call"
+                                                                    >
+                                                                        <RotateCw className={cn("w-3.5 h-3.5", isProcessing && "animate-spin")} />
+                                                                    </button>
+                                                                )}
+                                                            </div>
                                                             {singleResult.metadata?.cached && (
                                                                 <div className="flex flex-col items-center gap-1">
                                                                     <div className={`inline-flex items-center justify-center gap-1 text-[7px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border ${theme === 'dark' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' : 'bg-violet-50 text-violet-600 border-violet-200'}`}>
                                                                         Already Processed
                                                                     </div>
+                                                                    {singleResult.metadata?.synced && (
+                                                                        <div className={`inline-flex items-center justify-center gap-1 text-[7px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border transition-all ${theme === 'dark' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-200'}`}>
+                                                                            Synced
+                                                                        </div>
+                                                                    )}
                                                                     {singleResult.cachedAt && (
                                                                         <span className={`text-[8px] font-medium opacity-60 ${theme === 'dark' ? 'text-violet-300' : 'text-slate-500'}`}>
                                                                             Ran on {new Date(singleResult.cachedAt).toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })} {singleResult.cachedType ? `via ${singleResult.cachedType === 'bulk' ? 'Bulk Upload' : 'Single Try'}` : ''}
@@ -1932,6 +2157,15 @@ const App: React.FC = () => {
                                     </div>
                                     {rows.some(r => r.status !== 'pending' && r.status !== 'processing') && (
                                         <div className="flex items-center gap-3">
+                                            {rows.some(r => r.status === 'failed' || r.status === 'undeliverable' || r.status === 'not_found') && (
+                                                <button
+                                                    onClick={handleRetryFailed}
+                                                    disabled={isProcessing}
+                                                    className="px-5 py-2 bg-amber-600 text-white rounded-xl hover:bg-amber-500 transition-all font-bold text-xs shadow-lg flex items-center gap-2 disabled:opacity-50"
+                                                >
+                                                    <RotateCw className={cn("w-4 h-4", isProcessing && "animate-spin")} /> Retry Failed Results
+                                                </button>
+                                            )}
                                             {isHistoryView && appMode === 'enrich' && (
                                                 <button
                                                     onClick={handleGetApiResults}
@@ -1971,6 +2205,11 @@ const App: React.FC = () => {
                                                                     <div className={`inline-flex items-center justify-center gap-1 text-[7px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border ${theme === 'dark' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' : 'bg-violet-50 text-violet-600 border-violet-200'}`}>
                                                                         Already Processed
                                                                     </div>
+                                                                    {(row.synced || row.metadata?.synced) && (
+                                                                        <div className={`inline-flex items-center justify-center gap-1 text-[7px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border transition-all ${theme === 'dark' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-200'}`}>
+                                                                            Synced
+                                                                        </div>
+                                                                    )}
                                                                     {row.cachedAt && (
                                                                         <span className={`text-[8px] font-medium opacity-60 ${theme === 'dark' ? 'text-violet-300' : 'text-slate-500'}`}>
                                                                             Ran on {new Date(row.cachedAt).toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}  {row.cachedType ? `via ${row.cachedType === 'bulk' ? 'Bulk Upload' : 'Single Try'}` : ''}
