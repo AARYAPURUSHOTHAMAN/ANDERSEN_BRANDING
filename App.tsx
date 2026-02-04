@@ -33,7 +33,8 @@ import {
     Info,
     X,
     Settings,
-    Webhook
+    Webhook,
+    RotateCw
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -728,6 +729,154 @@ const App: React.FC = () => {
         setIsProcessing(false);
     };
 
+    const handleRetryFailed = async () => {
+        if (!mapping || isProcessing) return;
+        setIsProcessing(true);
+
+        const failedIndices = rows
+            .map((r, idx) => ({ status: r.status, idx }))
+            .filter(({ status }) => status === 'failed' || status === 'undeliverable' || status === 'not_found')
+            .map(({ idx }) => idx);
+
+        if (failedIndices.length === 0) {
+            setIsProcessing(false);
+            return;
+        }
+
+        const updatedRows = [...rows];
+
+        for (const i of failedIndices) {
+            updatedRows[i] = { ...updatedRows[i], status: appMode === 'linkedin' ? 'searching' : 'processing' };
+            setRows([...updatedRows]);
+
+            const row = updatedRows[i];
+            let resultRowUpdate: Partial<ProspectRow> = {};
+
+            try {
+                if (appMode === 'enrich') {
+                    const result = await findEmail(row.name, row.company);
+                    resultRowUpdate = {
+                        email: result.email,
+                        status: (result.success ? 'completed' : (result.message === 'No email found' ? 'not_found' : 'failed')) as any,
+                        error: result.success ? undefined : result.message
+                    };
+                } else if (appMode === 'linkedin') {
+                    const result = await findLinkedInUrl(row.name, row.company);
+                    resultRowUpdate = {
+                        linkedinUrl: result.url,
+                        status: (result.success ? 'found' : 'not_found') as any,
+                        error: result.success ? undefined : result.message
+                    };
+                } else if (appMode === 'verify') {
+                    const emailToVerify = row.email;
+                    if (!emailToVerify) {
+                        resultRowUpdate = { status: 'failed', error: 'No email found' };
+                    } else {
+                        const result = await verifyEmail(emailToVerify);
+                        resultRowUpdate = {
+                            status: (result.success ? (result.status as any) : 'failed') as any,
+                            error: result.success ? undefined : result.message,
+                            metadata: result.rawData
+                        };
+                    }
+                }
+            } catch (err) {
+                resultRowUpdate = { status: 'failed', error: 'Retry failed' };
+            }
+
+            updatedRows[i] = { ...updatedRows[i], ...resultRowUpdate };
+            setRows([...updatedRows]);
+            await new Promise(res => setTimeout(res, 300));
+        }
+
+        // Save updated results to Supabase (creating a new history record for the retry session)
+        const bulkEntry: HistoryEntry = {
+            id: `bulk-retry-${Date.now()}`,
+            type: 'bulk',
+            input: `Retry: ${file?.name || 'Bulk Session'}`,
+            result: `${failedIndices.length} Failed records retried`,
+            status: 'completed',
+            timestamp: Date.now(),
+            data: [...updatedRows],
+            headers: [...headers],
+            mapping: mapping ? { ...mapping } : undefined
+        };
+
+        const supabaseId = await saveToSupabase(bulkEntry, appMode);
+        if (supabaseId) bulkEntry.id = supabaseId;
+        setCurrentHistoryId(bulkEntry.id);
+
+        setIsProcessing(false);
+    };
+
+    const handleSingleRetry = async () => {
+        if (!singleName && !singleCompany && !singleEmail) return;
+        setIsProcessing(true);
+        setSingleResult(null);
+        setError(null);
+
+        let resultPayload: any;
+        try {
+            if (appMode === 'enrich') {
+                resultPayload = await findEmail(singleName, singleCompany);
+                setSingleResult({
+                    email: resultPayload.email,
+                    status: resultPayload.success ? 'completed' : 'failed',
+                    message: resultPayload.message,
+                    metadata: { retry: true }
+                });
+            } else if (appMode === 'linkedin') {
+                resultPayload = await findLinkedInUrl(singleName, singleCompany);
+                setSingleResult({
+                    linkedinUrl: resultPayload.url,
+                    status: resultPayload.success ? 'found' : 'failed',
+                    message: resultPayload.message,
+                    metadata: { retry: true }
+                });
+            } else if (appMode === 'verify') {
+                resultPayload = await verifyEmail(singleEmail);
+                setSingleResult({
+                    status: resultPayload.success ? resultPayload.status : 'failed',
+                    message: resultPayload.message,
+                    rawData: resultPayload.rawData,
+                    metadata: { retry: true }
+                });
+            }
+
+            const newHistoryEntry: HistoryEntry = {
+                id: `single-retry-${Date.now()}`,
+                type: 'single',
+                input: `Retry: ${appMode === 'verify' ? singleEmail : `${singleName} @ ${singleCompany}`}`,
+                result: resultPayload.email || resultPayload.url || resultPayload.status || 'Failed',
+                status: resultPayload.status || (resultPayload.success ? (appMode === 'linkedin' ? 'found' : 'completed') : 'failed'),
+                timestamp: Date.now(),
+                data: [{
+                    id: `retry-row-${Date.now()}`,
+                    name: singleName,
+                    company: singleCompany,
+                    email: appMode === 'enrich' ? resultPayload.email : (appMode === 'verify' ? singleEmail : undefined),
+                    linkedinUrl: appMode === 'linkedin' ? resultPayload.url : undefined,
+                    status: resultPayload.status || (resultPayload.success ? 'completed' : 'failed'),
+                    originalData: {},
+                    metadata: { ...resultPayload.rawData, retry: true }
+                }]
+            };
+
+            const supabaseId = await saveToSupabase(newHistoryEntry, appMode);
+            if (supabaseId) newHistoryEntry.id = supabaseId;
+            setCurrentHistoryId(newHistoryEntry.id);
+
+            setHistory(prev => ({
+                ...prev,
+                [appMode]: [newHistoryEntry, ...prev[appMode]].slice(0, 15)
+            }));
+        } catch (err) {
+            setError("Retry failed due to an unexpected error.");
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
     const checkExistingResult = async (mode: string, input1: string, input2?: string) => {
         if (!session?.user?.id) return null;
 
@@ -736,7 +885,6 @@ const App: React.FC = () => {
             if (mode === 'enrich') {
                 query = supabase.from('prospect_results')
                     .select('*')
-                    .eq('user_id', session.user.id)
                     .ilike('name', input1.trim())
                     .ilike('company', input2?.trim() || '')
                     .order('created_at', { ascending: true }) // Order by oldest first
@@ -746,14 +894,12 @@ const App: React.FC = () => {
             } else if (mode === 'verify') {
                 query = supabase.from('verification_results')
                     .select('*')
-                    .eq('user_id', session.user.id)
                     .ilike('email', input1.trim())
                     .order('created_at', { ascending: true })
                     .limit(50);
             } else if (mode === 'linkedin') {
                 query = supabase.from('linkedin_results')
                     .select('*')
-                    .eq('user_id', session.user.id)
                     .ilike('name', input1.trim())
                     .ilike('company', input2?.trim() || '')
                     .order('created_at', { ascending: true })
@@ -1861,7 +2007,19 @@ const App: React.FC = () => {
                                                     <div className="mt-2 flex flex-col items-center">
                                                         <span className={`text-[9px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1`}>Status</span>
                                                         <div className="flex flex-col gap-1">
-                                                            <div className={`inline-flex items-center justify-center gap-1 text-[9px] font-black uppercase tracking-[0.1em] px-3 py-1 rounded-full border shadow-sm min-w-[120px] ${singleResult.status === 'completed' || singleResult.status === 'deliverable' || singleResult.status === 'found' ? 'text-green-700 bg-green-100 border-green-200' : (singleResult.status === 'undeliverable' || singleResult.status === 'failed' ? 'text-rose-700 bg-rose-100 border-rose-200' : 'text-amber-700 bg-amber-100 border-amber-200')}`}>{singleResult.status === 'deliverable' ? 'VALID' : (singleResult.status === 'undeliverable' ? 'INVALID' : (singleResult.status || 'FAILED'))}</div>
+                                                            <div className="flex items-center gap-2">
+                                                                <div className={`inline-flex items-center justify-center gap-1 text-[9px] font-black uppercase tracking-[0.1em] px-3 py-1 rounded-full border shadow-sm min-w-[120px] ${singleResult.status === 'completed' || singleResult.status === 'deliverable' || singleResult.status === 'found' ? 'text-green-700 bg-green-100 border-green-200' : (singleResult.status === 'undeliverable' || singleResult.status === 'failed' ? 'text-rose-700 bg-rose-100 border-rose-200' : 'text-amber-700 bg-amber-100 border-amber-200')}`}>{singleResult.status === 'deliverable' ? 'VALID' : (singleResult.status === 'undeliverable' ? 'INVALID' : (singleResult.status || 'FAILED'))}</div>
+                                                                {(singleResult.status === 'failed' || singleResult.status === 'undeliverable' || singleResult.status === 'not_found') && (
+                                                                    <button
+                                                                        onClick={handleSingleRetry}
+                                                                        disabled={isProcessing}
+                                                                        className={`p-1.5 rounded-lg transition-all ${theme === 'dark' ? 'bg-violet-900/40 hover:bg-violet-900/60 text-violet-400' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'} disabled:opacity-50`}
+                                                                        title="Retry fresh API call"
+                                                                    >
+                                                                        <RotateCw className={cn("w-3.5 h-3.5", isProcessing && "animate-spin")} />
+                                                                    </button>
+                                                                )}
+                                                            </div>
                                                             {singleResult.metadata?.cached && (
                                                                 <div className="flex flex-col items-center gap-1">
                                                                     <div className={`inline-flex items-center justify-center gap-1 text-[7px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border ${theme === 'dark' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' : 'bg-violet-50 text-violet-600 border-violet-200'}`}>
@@ -1932,6 +2090,15 @@ const App: React.FC = () => {
                                     </div>
                                     {rows.some(r => r.status !== 'pending' && r.status !== 'processing') && (
                                         <div className="flex items-center gap-3">
+                                            {rows.some(r => r.status === 'failed' || r.status === 'undeliverable' || r.status === 'not_found') && (
+                                                <button
+                                                    onClick={handleRetryFailed}
+                                                    disabled={isProcessing}
+                                                    className="px-5 py-2 bg-amber-600 text-white rounded-xl hover:bg-amber-500 transition-all font-bold text-xs shadow-lg flex items-center gap-2 disabled:opacity-50"
+                                                >
+                                                    <RotateCw className={cn("w-4 h-4", isProcessing && "animate-spin")} /> Retry Failed Results
+                                                </button>
+                                            )}
                                             {isHistoryView && appMode === 'enrich' && (
                                                 <button
                                                     onClick={handleGetApiResults}

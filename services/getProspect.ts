@@ -1,7 +1,7 @@
 
 import { GetProspectResult, VerificationResult } from '../types';
 
-const GETPROSPECT_API_KEY = 'd5114350-d69d-4e5d-86ed-9fd655c123cb';
+const GETPROSPECT_API_KEY = 'b37b179d-ca01-49d0-b823-f674feda7ad7';
 const BASE_URL = 'https://api.getprospect.com/public/v1/email';
 
 export async function findEmail(name: string, company: string): Promise<GetProspectResult> {
