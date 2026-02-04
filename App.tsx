@@ -204,7 +204,7 @@ const App: React.FC = () => {
                 .select('*')
                 .eq('user_id', userId)
                 .order('created_at', { ascending: false })
-                .limit(50);
+                .limit(200);
 
             if (error) throw error;
 
@@ -725,7 +725,7 @@ const App: React.FC = () => {
             if (isDuplicate) return prev;
             return {
                 ...prev,
-                [appMode]: [bulkEntry, ...existingHistory].slice(0, 15)
+                [appMode]: [bulkEntry, ...existingHistory].slice(0, 100)
             };
         });
 
@@ -809,6 +809,11 @@ const App: React.FC = () => {
         if (supabaseId) bulkEntry.id = supabaseId;
         setCurrentHistoryId(bulkEntry.id);
 
+        setHistory(prev => ({
+            ...prev,
+            [appMode]: [bulkEntry, ...prev[appMode]].slice(0, 100)
+        }));
+
         setIsProcessing(false);
     };
 
@@ -871,7 +876,7 @@ const App: React.FC = () => {
 
             setHistory(prev => ({
                 ...prev,
-                [appMode]: [newHistoryEntry, ...prev[appMode]].slice(0, 15)
+                [appMode]: [newHistoryEntry, ...prev[appMode]].slice(0, 100)
             }));
         } catch (err) {
             setError("Retry failed due to an unexpected error.");
@@ -1093,7 +1098,7 @@ const App: React.FC = () => {
                     Math.abs(e.timestamp - newHistoryEntry.timestamp) < 2000
                 );
                 if (isDuplicate) return prev;
-                return { ...prev, [appMode]: [newHistoryEntry, ...existingHistory].slice(0, 15) };
+                return { ...prev, [appMode]: [newHistoryEntry, ...existingHistory].slice(0, 100) };
             });
 
         } catch (err) {
@@ -1137,6 +1142,7 @@ const App: React.FC = () => {
                 if (entry.feature === 'verify') {
                     reconstructedRows = results.map((r: any) => {
                         const original = r.result || {};
+                        const meta = { ...original, ...(r.metadata || {}) };
                         return {
                             id: r.id,
                             name: original.name || '',
@@ -1144,29 +1150,47 @@ const App: React.FC = () => {
                             email: r.email,
                             status: r.status as any,
                             originalData: original,
-                            metadata: { ...original } // Don't force cached: true
+                            metadata: meta,
+                            // Lift metadata fields to top-level for display logic
+                            cachedAt: meta.cachedAt,
+                            cachedType: meta.cachedType,
+                            synced: meta.synced
                         };
                     });
                 } else if (entry.feature === 'linkedin') {
-                    reconstructedRows = results.map((r: any) => ({
-                        id: r.id,
-                        name: r.name || '',
-                        company: r.company || '',
-                        linkedinUrl: r.linkedin_url,
-                        status: r.status as any,
-                        originalData: { ...r },
-                        metadata: { ...r } // Don't force cached: true
-                    }));
+                    reconstructedRows = results.map((r: any) => {
+                        const meta = r.metadata || { ...r };
+                        return {
+                            id: r.id,
+                            name: r.name || '',
+                            company: r.company || '',
+                            linkedinUrl: r.linkedin_url,
+                            status: r.status as any,
+                            originalData: { ...r },
+                            metadata: meta,
+                            // Lift metadata fields
+                            cachedAt: meta.cachedAt,
+                            cachedType: meta.cachedType,
+                            synced: meta.synced
+                        };
+                    });
                 } else {
-                    reconstructedRows = results.map((p: any) => ({
-                        id: p.id,
-                        name: p.name || '',
-                        company: p.company || '',
-                        email: p.email,
-                        status: p.status as any,
-                        originalData: { ...p },
-                        metadata: { ...p } // Don't force cached: true
-                    }));
+                    reconstructedRows = results.map((p: any) => {
+                        const meta = p.metadata || { ...p };
+                        return {
+                            id: p.id,
+                            name: p.name || '',
+                            company: p.company || '',
+                            email: p.email,
+                            status: p.status as any,
+                            originalData: { ...p },
+                            metadata: meta,
+                            // Lift metadata fields
+                            cachedAt: meta.cachedAt,
+                            cachedType: meta.cachedType,
+                            synced: meta.synced
+                        };
+                    });
                 }
 
                 setRows(reconstructedRows);
