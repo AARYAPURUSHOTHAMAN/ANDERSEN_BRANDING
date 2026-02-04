@@ -628,7 +628,8 @@ const App: React.FC = () => {
                     resultRowUpdate = {
                         email: existing.email,
                         status: existing.status as any,
-                        metadata: { ...existing.result, cached: true },
+                        metadata: { ...existing.result, cached: true, synced: (existing as any).globallySynced },
+                        synced: (existing as any).globallySynced,
                         cachedAt: existing.created_at,
                         cachedType: (existing as any).historyType
                     };
@@ -636,14 +637,16 @@ const App: React.FC = () => {
                     resultRowUpdate = {
                         linkedinUrl: existing.linkedin_url,
                         status: existing.status as any,
-                        metadata: { cached: true },
+                        metadata: { cached: true, synced: (existing as any).globallySynced },
+                        synced: (existing as any).globallySynced,
                         cachedAt: existing.created_at,
                         cachedType: (existing as any).historyType
                     };
                 } else if (appMode === 'verify') {
                     resultRowUpdate = {
                         status: existing.status as any,
-                        metadata: { ...existing.rawData, cached: true },
+                        metadata: { ...existing.rawData, cached: true, synced: (existing as any).globallySynced },
+                        synced: (existing as any).globallySynced,
                         cachedAt: existing.created_at,
                         cachedType: (existing as any).historyType
                     };
@@ -929,6 +932,26 @@ const App: React.FC = () => {
                     (result as any).historyType = cachedTypeFromData || hData.type;
                 }
             }
+
+            // --- Global Sync Check ---
+            // If we found a result, check if it was ever synced to the API endpoint by ANY user
+            if (result) {
+                let syncQuery = supabase.from('api_sync_results').select('id').limit(1);
+                if (mode === 'enrich' || mode === 'linkedin') {
+                    syncQuery = syncQuery
+                        .ilike('prospect_name', input1.trim())
+                        .ilike('prospect_company', input2?.trim() || '');
+                } else if (mode === 'verify') {
+                    syncQuery = syncQuery.ilike('email_used', input1.trim());
+                }
+
+                const { data: syncData } = await syncQuery;
+                if (syncData && syncData.length > 0) {
+                    (result as any).globallySynced = true;
+                }
+            }
+            // -------------------------
+
             return result || null;
         } catch (err) {
             console.error("Cache lookup failed", err);
@@ -954,7 +977,7 @@ const App: React.FC = () => {
                     status: existing.status,
                     message: "Already Processed",
                     rawData: existing.result,
-                    metadata: { cached: true },
+                    metadata: { cached: true, synced: (existing as any).globallySynced },
                     cachedAt: existing.created_at,
                     cachedType: (existing as any).historyType
                 });
@@ -974,9 +997,11 @@ const App: React.FC = () => {
                         linkedinUrl: existing.linkedin_url,
                         status: existing.status,
                         originalData: {},
-                        metadata: { ...existing.result, cached: true } // Ensure metadata includes cached status
+                        synced: (existing as any).globallySynced,
+                        metadata: { ...existing.result, cached: true, synced: (existing as any).globallySynced } // Ensure metadata includes cached and synced status
                     }],
                     hasCached: true,
+                    synced: (existing as any).globallySynced,
                     cachedAt: existing.created_at,
                     cachedType: (existing as any).historyType
                 };
@@ -1485,22 +1510,59 @@ const App: React.FC = () => {
 
     const handleGetApiResults = async () => {
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        if (!currentHistoryId || !uuidRegex.test(currentHistoryId)) {
-            alert("Invalid session ID or historical entry. Search for new results or click a synced entry from history.");
-            return;
-        }
+        const isHistoryIdValid = currentHistoryId && uuidRegex.test(currentHistoryId);
 
         setIsProcessing(true);
         try {
-            const { data, error } = await supabase
-                .from('api_sync_results')
-                .select('*')
-                .eq('history_id', currentHistoryId);
+            let data: any[] | null = null;
+            let error: any = null;
+
+            // 1. Try fetching by current history_id first
+            if (isHistoryIdValid) {
+                const result = await supabase
+                    .from('api_sync_results')
+                    .select('*')
+                    .eq('history_id', currentHistoryId);
+                data = result.data;
+                error = result.error;
+            }
+
+            // 2. Global Fallback: If no results by history_id, search by input values (Global Sync Lookup)
+            if (!data || data.length === 0) {
+                let globalQuery = supabase.from('api_sync_results').select('*');
+
+                if (inputMode === 'single') {
+                    if (appMode === 'verify') {
+                        globalQuery = globalQuery.ilike('email_used', singleEmail.trim());
+                    } else {
+                        globalQuery = globalQuery
+                            .ilike('prospect_name', singleName.trim())
+                            .ilike('prospect_company', singleCompany.trim());
+                    }
+                } else {
+                    // For bulk, filter for results matching any row in the current list
+                    const names = rows.map(r => r.name.trim()).filter(Boolean);
+                    const companies = rows.map(r => r.company.trim()).filter(Boolean);
+                    const emails = rows.map(r => r.email?.trim()).filter(Boolean);
+
+                    if (appMode === 'verify') {
+                        if (emails.length > 0) globalQuery = globalQuery.in('email_used', emails);
+                        else { setIsProcessing(false); alert("No data to match."); return; }
+                    } else {
+                        if (names.length > 0) globalQuery = globalQuery.in('prospect_name', names).in('prospect_company', companies);
+                        else { setIsProcessing(false); alert("No data to match."); return; }
+                    }
+                }
+
+                const result = await globalQuery;
+                data = result.data;
+                error = result.error;
+            }
 
             if (error) throw error;
 
             if (!data || data.length === 0) {
-                alert("No API results found for this session.");
+                alert("No API results found for this entry or session.");
                 return;
             }
 
@@ -1514,7 +1576,7 @@ const App: React.FC = () => {
             setShowApiResultModal(true);
         } catch (err) {
             console.error("Failed to fetch API results:", err);
-            alert("Failed to fetch API results from history.");
+            alert("Failed to fetch API results.");
         } finally {
             setIsProcessing(false);
         }
@@ -2025,6 +2087,11 @@ const App: React.FC = () => {
                                                                     <div className={`inline-flex items-center justify-center gap-1 text-[7px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border ${theme === 'dark' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' : 'bg-violet-50 text-violet-600 border-violet-200'}`}>
                                                                         Already Processed
                                                                     </div>
+                                                                    {singleResult.metadata?.synced && (
+                                                                        <div className={`inline-flex items-center justify-center gap-1 text-[7px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border transition-all ${theme === 'dark' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-200'}`}>
+                                                                            Synced
+                                                                        </div>
+                                                                    )}
                                                                     {singleResult.cachedAt && (
                                                                         <span className={`text-[8px] font-medium opacity-60 ${theme === 'dark' ? 'text-violet-300' : 'text-slate-500'}`}>
                                                                             Ran on {new Date(singleResult.cachedAt).toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })} {singleResult.cachedType ? `via ${singleResult.cachedType === 'bulk' ? 'Bulk Upload' : 'Single Try'}` : ''}
@@ -2138,6 +2205,11 @@ const App: React.FC = () => {
                                                                     <div className={`inline-flex items-center justify-center gap-1 text-[7px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border ${theme === 'dark' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' : 'bg-violet-50 text-violet-600 border-violet-200'}`}>
                                                                         Already Processed
                                                                     </div>
+                                                                    {(row.synced || row.metadata?.synced) && (
+                                                                        <div className={`inline-flex items-center justify-center gap-1 text-[7px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border transition-all ${theme === 'dark' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-200'}`}>
+                                                                            Synced
+                                                                        </div>
+                                                                    )}
                                                                     {row.cachedAt && (
                                                                         <span className={`text-[8px] font-medium opacity-60 ${theme === 'dark' ? 'text-violet-300' : 'text-slate-500'}`}>
                                                                             Ran on {new Date(row.cachedAt).toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}  {row.cachedType ? `via ${row.cachedType === 'bulk' ? 'Bulk Upload' : 'Single Try'}` : ''}
