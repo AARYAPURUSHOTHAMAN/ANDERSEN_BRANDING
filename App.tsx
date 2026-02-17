@@ -1039,7 +1039,7 @@ const App: React.FC = () => {
 
                 setHistory(prev => {
                     const existingHistory = prev[appMode];
-                    return { ...prev, [appMode]: [cachedHistoryEntry, ...existingHistory].slice(0, 15) };
+                    return { ...prev, [appMode]: [cachedHistoryEntry, ...existingHistory].slice(0, 100) };
                 });
 
                 setIsProcessing(false);
