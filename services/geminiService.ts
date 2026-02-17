@@ -49,7 +49,7 @@ export async function suggestMappings(headers: string[]): Promise<{ nameHeader: 
  */
 export async function findLinkedInUrl(name: string, company: string): Promise<{ url?: string; success: boolean; message?: string }> {
   const SERP_API_KEY = 'daf213863947b26837bcd3a5f0955e62cf5ddaa6257f37b437750fff4b7473bf';
-  
+
   const queryStr = `site:linkedin.com/in "${name}" ${company}`;
   const encodedQuery = encodeURIComponent(queryStr);
   const targetUrl = `https://serpapi.com/search.json?engine=google&q=${encodedQuery}&api_key=${SERP_API_KEY}`;
@@ -61,7 +61,7 @@ export async function findLinkedInUrl(name: string, company: string): Promise<{ 
       const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(finalUrl)}`;
 
       const response = await fetch(proxyUrl);
-      
+
       if (!response.ok) {
         throw new Error(`Proxy error: ${response.status}`);
       }
