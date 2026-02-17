@@ -157,18 +157,27 @@ const App: React.FC = () => {
     }>({ enrich: [], verify: [], linkedin: [], 'event-scraper': [] });
 
     // App Logic State
-    const [file, setFile] = useState<File | null>(null);
-
-    // Debugging Render State
-    useEffect(() => {
-        console.log("App Render State - session:", session ? "Present" : "Null", "isInitialAuthCheck:", isInitialAuthCheck);
-    }, [session, isInitialAuthCheck]);
-    const [headers, setHeaders] = useState<string[]>([]);
-    const [rows, setRows] = useState<ProspectRow[]>([]);
-    const [mapping, setMapping] = useState<MappingConfig | null>(null);
-    const [isProcessing, setIsProcessing] = useState(false);
     const [isSuggesting, setIsSuggesting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    // Feature specific data & processing states
+    const [enrichRows, setEnrichRows] = useState<ProspectRow[]>([]);
+    const [enrichHeaders, setEnrichHeaders] = useState<string[]>([]);
+    const [enrichMapping, setEnrichMapping] = useState<MappingConfig | null>(null);
+    const [enrichFile, setEnrichFile] = useState<File | null>(null);
+    const [isEnrichProcessing, setIsEnrichProcessing] = useState(false);
+
+    const [verifyRows, setVerifyRows] = useState<ProspectRow[]>([]);
+    const [verifyHeaders, setVerifyHeaders] = useState<string[]>([]);
+    const [verifyMapping, setVerifyMapping] = useState<MappingConfig | null>(null);
+    const [verifyFile, setVerifyFile] = useState<File | null>(null);
+    const [isVerifyProcessing, setIsVerifyProcessing] = useState(false);
+
+    const [linkedinRows, setLinkedinRows] = useState<ProspectRow[]>([]);
+    const [linkedinHeaders, setLinkedinHeaders] = useState<string[]>([]);
+    const [linkedinMapping, setLinkedinMapping] = useState<MappingConfig | null>(null);
+    const [linkedinFile, setLinkedinFile] = useState<File | null>(null);
+    const [isLinkedinProcessing, setIsLinkedinProcessing] = useState(false);
 
     // Cross-feature persistence
     const [resultsFromFinder, setResultsFromFinder] = useState<ProspectRow[]>([]);
@@ -184,6 +193,40 @@ const App: React.FC = () => {
     const [scrapedSpeakers, setScrapedSpeakers] = useState<ScrapedSpeaker[]>([]);
     const [lastScrapedResults, setLastScrapedResults] = useState<ScrapedSpeaker[]>([]);
     const [isScraping, setIsScraping] = useState(false);
+
+    // Derived states for current active feature
+    const rows = appMode === 'enrich' ? enrichRows : (appMode === 'verify' ? verifyRows : (appMode === 'linkedin' ? linkedinRows : []));
+    const headers = appMode === 'enrich' ? enrichHeaders : (appMode === 'verify' ? verifyHeaders : (appMode === 'linkedin' ? linkedinHeaders : []));
+    const mapping = appMode === 'enrich' ? enrichMapping : (appMode === 'verify' ? verifyMapping : (appMode === 'linkedin' ? linkedinMapping : null));
+    const file = appMode === 'enrich' ? enrichFile : (appMode === 'verify' ? verifyFile : (appMode === 'linkedin' ? linkedinFile : null));
+    const isProcessing = appMode === 'enrich' ? isEnrichProcessing : (appMode === 'verify' ? isVerifyProcessing : (appMode === 'linkedin' ? isLinkedinProcessing : false));
+
+    // Dynamic state setters
+    const setRows = (val: ProspectRow[] | ((prev: ProspectRow[]) => ProspectRow[])) => {
+        if (appMode === 'enrich') setEnrichRows(val);
+        else if (appMode === 'verify') setVerifyRows(val);
+        else if (appMode === 'linkedin') setLinkedinRows(val);
+    };
+    const setHeaders = (val: string[]) => {
+        if (appMode === 'enrich') setEnrichHeaders(val);
+        else if (appMode === 'verify') setVerifyHeaders(val);
+        else if (appMode === 'linkedin') setLinkedinHeaders(val);
+    };
+    const setMapping = (val: MappingConfig | null | ((prev: MappingConfig | null) => MappingConfig | null)) => {
+        if (appMode === 'enrich') setEnrichMapping(val);
+        else if (appMode === 'verify') setVerifyMapping(val);
+        else if (appMode === 'linkedin') setLinkedinMapping(val);
+    };
+    const setFile = (val: File | null) => {
+        if (appMode === 'enrich') setEnrichFile(val);
+        else if (appMode === 'verify') setVerifyFile(val);
+        else if (appMode === 'linkedin') setLinkedinFile(val);
+    };
+    const setIsProcessing = (val: boolean) => {
+        if (appMode === 'enrich') setIsEnrichProcessing(val);
+        else if (appMode === 'verify') setIsVerifyProcessing(val);
+        else if (appMode === 'linkedin') setIsLinkedinProcessing(val);
+    };
 
     // Listen for auth state changes
     useEffect(() => {
@@ -1637,16 +1680,7 @@ const App: React.FC = () => {
 
     const handleTabSwitch = (mode: 'enrich' | 'verify' | 'linkedin' | 'event-scraper') => {
         if (appMode !== mode) {
-            if (mode === 'linkedin' || appMode === 'linkedin') setResultsFromFinder([]);
             setAppMode(mode);
-            setFile(null);
-            setRows([]);
-            setHeaders([]);
-            setMapping(null);
-            setSingleResult(null);
-            setSingleName('');
-            setSingleCompany('');
-            setSingleEmail('');
             setError(null);
             setIsHistoryView(false);
             setShowExportModal(false);
