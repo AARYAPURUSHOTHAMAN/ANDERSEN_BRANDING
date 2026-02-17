@@ -40,9 +40,11 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recha
 import { motion, AnimatePresence } from 'framer-motion';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { ProspectRow, MappingConfig, HistoryEntry } from './types';
+import { ProspectRow, MappingConfig, HistoryEntry, ScrapedSpeaker } from './types';
 import { findEmail, verifyEmail } from './services/getProspect';
 import { suggestMappings, findLinkedInUrl } from './services/geminiService';
+import { scrapeEvent } from './services/scraperService';
+import { Globe, Users } from 'lucide-react';
 
 // Initialize Supabase client with safety fallbacks to prevent "supabaseUrl is required" error
 const SUPABASE_URL = (import.meta as any).env?.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://jftnwoojuofxzufmrogx.supabase.co';
@@ -80,7 +82,7 @@ const BoxesCore = ({ className, ...rest }: { className?: string }) => {
                 transform: `translate(-45%,-60%) skewX(-48deg) skewY(14deg) scale(1.5) rotate(0deg) translateZ(0)`,
             }}
             className={cn(
-                "absolute left-1/4 p-4 -top-1/4 flex -translate-x-1/2 -translate-y-1/2 w-full h-full z-0 ",
+                "absolute left-1/4 p-4 -top-1/4 flex -translate-x-1/2 -translate-y-1/2 w-full h-full z-[-10] pointer-events-none",
                 className
             )}
             {...rest}
@@ -143,7 +145,7 @@ const App: React.FC = () => {
     const [isHistoryView, setIsHistoryView] = useState(false);
 
     // App Mode & Input Mode
-    const [appMode, setAppMode] = useState<'enrich' | 'verify' | 'linkedin'>('enrich');
+    const [appMode, setAppMode] = useState<'enrich' | 'verify' | 'linkedin' | 'event-scraper'>('enrich');
     const [inputMode, setInputMode] = useState<'bulk' | 'single'>('bulk');
 
     // Local History State
@@ -151,7 +153,8 @@ const App: React.FC = () => {
         enrich: HistoryEntry[];
         verify: HistoryEntry[];
         linkedin: HistoryEntry[];
-    }>({ enrich: [], verify: [], linkedin: [] });
+        'event-scraper': HistoryEntry[];
+    }>({ enrich: [], verify: [], linkedin: [], 'event-scraper': [] });
 
     // App Logic State
     const [file, setFile] = useState<File | null>(null);
@@ -175,6 +178,12 @@ const App: React.FC = () => {
     const [singleCompany, setSingleCompany] = useState('');
     const [singleEmail, setSingleEmail] = useState('');
     const [singleResult, setSingleResult] = useState<{ email?: string; linkedinUrl?: string; status?: string; message?: string; rawData?: any; metadata?: any; cachedAt?: string; cachedType?: string } | null>(null);
+
+    // Event Scraper State
+    const [eventUrl, setEventUrl] = useState('');
+    const [scrapedSpeakers, setScrapedSpeakers] = useState<ScrapedSpeaker[]>([]);
+    const [lastScrapedResults, setLastScrapedResults] = useState<ScrapedSpeaker[]>([]);
+    const [isScraping, setIsScraping] = useState(false);
 
     // Listen for auth state changes
     useEffect(() => {
@@ -220,7 +229,8 @@ const App: React.FC = () => {
                 const newHistory = {
                     enrich: [] as HistoryEntry[],
                     verify: [] as HistoryEntry[],
-                    linkedin: [] as HistoryEntry[]
+                    linkedin: [] as HistoryEntry[],
+                    'event-scraper': [] as HistoryEntry[]
                 };
 
                 data.forEach((row: any) => {
@@ -280,7 +290,7 @@ const App: React.FC = () => {
         if (session?.user?.id) {
             fetchHistory(session.user.id);
         } else {
-            setHistory({ enrich: [], verify: [], linkedin: [] });
+            setHistory({ enrich: [], verify: [], linkedin: [], 'event-scraper': [] });
         }
     }, [session]);
 
@@ -540,7 +550,7 @@ const App: React.FC = () => {
         setAuthName('');
         setSingleResult(null);
         setResultsFromFinder([]);
-        setHistory({ enrich: [], verify: [], linkedin: [] }); // Clear history on logout
+        setHistory({ enrich: [], verify: [], linkedin: [], 'event-scraper': [] }); // Clear history on logout
     };
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1625,7 +1635,7 @@ const App: React.FC = () => {
         statusPending: theme === 'dark' ? 'text-violet-400/30' : 'text-slate-400'
     };
 
-    const handleTabSwitch = (mode: 'enrich' | 'verify' | 'linkedin') => {
+    const handleTabSwitch = (mode: 'enrich' | 'verify' | 'linkedin' | 'event-scraper') => {
         if (appMode !== mode) {
             if (mode === 'linkedin' || appMode === 'linkedin') setResultsFromFinder([]);
             setAppMode(mode);
@@ -1639,6 +1649,8 @@ const App: React.FC = () => {
             setSingleEmail('');
             setError(null);
             setIsHistoryView(false);
+            setShowExportModal(false);
+            setShowSettingsMenu(false);
         }
     };
 
@@ -1654,6 +1666,56 @@ const App: React.FC = () => {
         setMapping({ nameHeader: 'Found Name', companyHeader: 'Found Company', emailHeader: 'Found Email' });
         setFile(new File([], "Enriched Emails List"));
     };
+
+    const handleImportFromScraper = (targetMode: 'enrich' | 'linkedin') => {
+        if (lastScrapedResults.length === 0) return;
+        const newRows: ProspectRow[] = lastScrapedResults.map((s, idx) => ({
+            id: `scraped-import-${idx}`,
+            name: s.name,
+            company: s.company,
+            status: 'pending',
+            originalData: { 'Scraped Name': s.name, 'Scraped Company': s.company, 'Role': s.role || '' }
+        }));
+
+        setAppMode(targetMode);
+        setRows(newRows);
+        setHeaders(['Scraped Name', 'Scraped Company', 'Role']);
+        setMapping({ nameHeader: 'Scraped Name', companyHeader: 'Scraped Company' });
+        setFile(new File([], "Imported Scraper Leads"));
+    };
+
+    const handleScrape = async () => {
+        if (!eventUrl) return;
+        setIsScraping(true);
+        setError(null);
+        setScrapedSpeakers([]);
+
+        try {
+            const result = await scrapeEvent(eventUrl);
+            if (result.success) {
+                setScrapedSpeakers(result.speakers);
+                setLastScrapedResults(result.speakers);
+                if (result.speakers.length === 0) {
+                    setError("No speakers found on this page. Try a different URL or page.");
+                }
+            } else {
+                setError(result.message || "Failed to scrape page.");
+            }
+        } catch (err: any) {
+            setError(err.message || "An unexpected error occurred during scraping.");
+        } finally {
+            setIsScraping(false);
+        }
+    };
+
+    const handleProcessLeads = () => {
+        if (scrapedSpeakers.length === 0) return;
+        setLastScrapedResults(scrapedSpeakers);
+        handleImportFromScraper('enrich');
+        setScrapedSpeakers([]);
+        setEventUrl('');
+    };
+
 
     if (isInitialAuthCheck) {
         return (
@@ -1732,9 +1794,63 @@ const App: React.FC = () => {
     }
 
     return (
-        <div className={`min-h-screen ${themeClasses.bg} flex flex-col ${themeClasses.text} relative transition-colors duration-500 overflow-hidden`}>
-            <BackgroundBoxes className="opacity-40" />
-            <div className={cn("absolute inset-0 w-full h-full z-0 [mask-image:radial-gradient(transparent,white)] pointer-events-none", theme === 'dark' ? "bg-slate-900/30" : "bg-[#f5f0e1]/30")} />
+        <div className={`min-h-screen flex flex-col ${themeClasses.text} relative transition-colors duration-500 overflow-hidden`}>
+            {/* Background Decorative Layer */}
+            <div className={`fixed inset-0 pointer-events-none z-0 overflow-hidden ${themeClasses.bg}`}>
+                <BackgroundBoxes className="opacity-40" />
+                <div className={cn("absolute inset-0 w-full h-full [mask-image:radial-gradient(transparent,white)]", theme === 'dark' ? "bg-slate-900/30" : "bg-[#f5f0e1]/30")} />
+            </div>
+
+            <header className={`${themeClasses.header} border-b fixed top-0 left-0 right-0 z-[1000] px-6 h-20 flex items-center justify-between transition-all duration-300 pointer-events-auto shadow-sm`}>
+                <div className="flex items-center gap-3">
+                    <div className="bg-violet-600 p-2 rounded-xl shadow-lg shadow-violet-600/20"><Mail className="w-5 h-5 text-white" /></div>
+                    <h1 className={`text-xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'} tracking-tight`}>10xMailMatch</h1>
+                </div>
+                <div className="flex items-center gap-4">
+                    <div className={`flex ${theme === 'dark' ? 'bg-white/5 border-white/10' : 'bg-black/5 border-black/10'} p-1 rounded-xl border`}>
+                        <button onClick={() => handleTabSwitch('enrich')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${appMode === 'enrich' ? 'bg-violet-600 text-white shadow-lg' : theme === 'dark' ? 'text-violet-400 hover:text-violet-200' : 'text-slate-500 hover:text-slate-700'}`}>Email Finder</button>
+                        <button onClick={() => handleTabSwitch('verify')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${appMode === 'verify' ? 'bg-violet-600 text-white shadow-lg' : theme === 'dark' ? 'text-violet-400 hover:text-violet-200' : 'text-slate-500 hover:text-slate-700'}`}>Email Verifier</button>
+                        <button onClick={() => handleTabSwitch('linkedin')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${appMode === 'linkedin' ? 'bg-blue-600 text-white shadow-lg' : theme === 'dark' ? 'text-violet-400 hover:text-violet-200' : 'text-slate-500 hover:text-slate-700'}`}>LinkedIn Finder</button>
+                        <button onClick={() => handleTabSwitch('event-scraper')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${appMode === 'event-scraper' ? 'bg-emerald-600 text-white shadow-lg' : theme === 'dark' ? 'text-violet-400 hover:text-violet-200' : 'text-slate-500 hover:text-slate-700'}`}>Event Scraper</button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className={`p-2 rounded-xl border ${theme === 'dark' ? 'bg-violet-900/40 border-violet-800/50 text-violet-400 hover:text-violet-100' : 'bg-white border-amber-200 text-slate-600 hover:text-slate-900'} transition-all`}>{theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}</button>
+
+                        {/* Settings Dropdown */}
+                        <div className="relative">
+                            <button
+                                onClick={() => setShowSettingsMenu(!showSettingsMenu)}
+                                className={`p-2 rounded-xl border ${theme === 'dark' ? 'bg-violet-900/40 border-violet-800/50 text-violet-400 hover:text-violet-100' : 'bg-white border-amber-200 text-slate-600 hover:text-slate-900'} transition-all`}
+                            >
+                                <Settings className="w-5 h-5" />
+                            </button>
+
+                            <AnimatePresence>
+                                {showSettingsMenu && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                        className={`absolute right-0 top-full mt-2 w-64 p-4 rounded-2xl border ${themeClasses.card} shadow-xl z-50 flex flex-col gap-3`}
+                                    >
+                                        <div className="flex flex-col gap-1 pb-3 border-b border-gray-500/10">
+                                            <span className={`text-[10px] font-bold uppercase tracking-widest ${themeClasses.label}`}>Signed in as</span>
+                                            <p className={`text-sm font-medium truncate ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{session?.user?.email}</p>
+                                        </div>
+
+                                        <button
+                                            onClick={() => { setShowSettingsMenu(false); setShowLogoutConfirm(true); }}
+                                            className={`flex items-center gap-2 px-4 py-2.5 ${theme === 'dark' ? 'bg-rose-900/20 hover:bg-rose-900/40 text-rose-400' : 'bg-rose-50 hover:bg-rose-100 text-rose-600'} rounded-xl text-sm font-bold transition-all w-full`}
+                                        >
+                                            <LogOut className="w-4 h-4" /> Sign Out
+                                        </button>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+                    </div>
+                </div>
+            </header>
 
             <AnimatePresence>
                 {showLogoutConfirm && (
@@ -1779,11 +1895,18 @@ const App: React.FC = () => {
                                 </button>
 
                                 {!isHistoryView && appMode === 'enrich' && (
-                                    <button onClick={handleApiExport} className={`group flex flex-col items-center p-6 rounded-3xl border-2 transition-all duration-300 md:col-span-2 ${theme === 'dark' ? 'bg-white/5 border-violet-800/30 hover:border-blue-500/50 hover:bg-blue-500/5' : 'bg-white border-slate-200 hover:border-blue-500 hover:bg-blue-50'}`}>
-                                        <Webhook className="w-10 h-10 text-blue-500 mb-3 group-hover:scale-110 transition-transform" />
-                                        <span className={`font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-800'} text-sm`}>Sync to API</span>
-                                        <span className="text-[10px] opacity-40 uppercase font-black tracking-widest mt-1">POST to Webhook</span>
-                                    </button>
+                                    <>
+                                        <button onClick={handleApiExport} className={`group flex flex-col items-center p-6 rounded-3xl border-2 transition-all duration-300 md:col-span-2 ${theme === 'dark' ? 'bg-white/5 border-violet-800/30 hover:border-blue-500/50 hover:bg-blue-500/5' : 'bg-white border-slate-200 hover:border-blue-500 hover:bg-blue-50'}`}>
+                                            <Webhook className="w-10 h-10 text-blue-500 mb-3 group-hover:scale-110 transition-transform" />
+                                            <span className={`font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-800'} text-sm`}>Sync to API</span>
+                                            <span className="text-[10px] opacity-40 uppercase font-black tracking-widest mt-1">POST to Webhook</span>
+                                        </button>
+                                        <button onClick={() => { setShowExportModal(false); setAppMode('verify'); handleImportFromFinder(); }} className={`group flex flex-col items-center p-6 rounded-3xl border-2 transition-all duration-300 md:col-span-2 ${theme === 'dark' ? 'bg-white/5 border-violet-800/30 hover:border-violet-500/50 hover:bg-violet-500/5' : 'bg-white border-slate-200 hover:border-violet-500 hover:bg-violet-50'}`}>
+                                            <ShieldCheck className="w-10 h-10 text-violet-500 mb-3 group-hover:scale-110 transition-transform" />
+                                            <span className={`font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-800'} text-sm`}>Verify Emails</span>
+                                            <span className="text-[10px] opacity-40 uppercase font-black tracking-widest mt-1">Check Validity</span>
+                                        </button>
+                                    </>
                                 )}
                             </div>
                         </motion.div>
@@ -1856,294 +1979,325 @@ const App: React.FC = () => {
                     </motion.div>
                 )}
             </AnimatePresence>
-
-            <header className={`${themeClasses.header} border-b sticky top-0 z-50 px-6 h-20 flex items-center justify-between transition-all duration-300`}>
-                <div className="flex items-center gap-3">
-                    <div className="bg-violet-600 p-2 rounded-xl shadow-lg shadow-violet-600/20"><Mail className="w-5 h-5 text-white" /></div>
-                    <h1 className={`text-xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'} tracking-tight`}>10xMailMatch</h1>
-                </div>
-                <div className="flex items-center gap-4">
-                    <div className={`hidden sm:flex ${theme === 'dark' ? 'bg-white/5 border-white/10' : 'bg-black/5 border-black/10'} p-1 rounded-xl border`}>
-                        <button onClick={() => handleTabSwitch('enrich')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${appMode === 'enrich' ? 'bg-violet-600 text-white shadow-lg' : theme === 'dark' ? 'text-violet-400 hover:text-violet-200' : 'text-slate-500 hover:text-slate-700'}`}>Email Finder</button>
-                        <button onClick={() => handleTabSwitch('verify')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${appMode === 'verify' ? 'bg-violet-600 text-white shadow-lg' : theme === 'dark' ? 'text-violet-400 hover:text-violet-200' : 'text-slate-500 hover:text-slate-700'}`}>Email Verifier</button>
-                        <button onClick={() => handleTabSwitch('linkedin')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${appMode === 'linkedin' ? 'bg-blue-600 text-white shadow-lg' : theme === 'dark' ? 'text-violet-400 hover:text-violet-200' : 'text-slate-500 hover:text-slate-700'}`}>LinkedIn Finder</button>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className={`p-2 rounded-xl border ${theme === 'dark' ? 'bg-violet-900/40 border-violet-800/50 text-violet-400 hover:text-violet-100' : 'bg-white border-amber-200 text-slate-600 hover:text-slate-900'} transition-all`}>{theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}</button>
-
-                        {/* Settings Dropdown */}
-                        <div className="relative">
-                            <button
-                                onClick={() => setShowSettingsMenu(!showSettingsMenu)}
-                                className={`p-2 rounded-xl border ${theme === 'dark' ? 'bg-violet-900/40 border-violet-800/50 text-violet-400 hover:text-violet-100' : 'bg-white border-amber-200 text-slate-600 hover:text-slate-900'} transition-all`}
-                            >
-                                <Settings className="w-5 h-5" />
-                            </button>
-
-                            <AnimatePresence>
-                                {showSettingsMenu && (
-                                    <motion.div
-                                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                                        className={`absolute right-0 top-full mt-2 w-64 p-4 rounded-2xl border ${themeClasses.card} shadow-xl z-50 flex flex-col gap-3`}
-                                    >
-                                        <div className="flex flex-col gap-1 pb-3 border-b border-gray-500/10">
-                                            <span className={`text-[10px] font-bold uppercase tracking-widest ${themeClasses.label}`}>Signed in as</span>
-                                            <p className={`text-sm font-medium truncate ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{session?.user?.email}</p>
-                                        </div>
-
-                                        <button
-                                            onClick={() => { setShowSettingsMenu(false); setShowLogoutConfirm(true); }}
-                                            className={`flex items-center gap-2 px-4 py-2.5 ${theme === 'dark' ? 'bg-rose-900/20 hover:bg-rose-900/40 text-rose-400' : 'bg-rose-50 hover:bg-rose-100 text-rose-600'} rounded-xl text-sm font-bold transition-all w-full`}
-                                        >
-                                            <LogOut className="w-4 h-4" /> Sign Out
-                                        </button>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </div>
-                    </div>
-                </div>
-            </header>
-            <main className="flex-1 max-w-7xl mx-auto w-full px-6 py-2 animate-fade-in relative z-10">
+            <main className="flex-1 max-w-7xl mx-auto w-full px-6 py-2 pt-28 animate-fade-in relative z-10">
                 {!file ? (
-                    <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
-                        <div className="lg:col-span-2 space-y-4">
-                            <div className={`${themeClasses.card} p-5 rounded-3xl overflow-hidden flex flex-col h-[calc(100vh-18rem)] min-h-[550px]`}>
-                                <div className="flex items-center gap-2 mb-4">
-                                    <HistoryIcon className="w-4 h-4 text-violet-500" />
-                                    <h3 className={`text-sm font-black uppercase tracking-widest ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Recent activity</h3>
-                                </div>
-                                <div className="flex gap-4 flex-1 overflow-hidden mb-4">
-                                    {/* Bulk Section */}
-                                    <div className="flex-1 flex flex-col min-w-0">
-                                        <h4 className={`text-[8px] font-black uppercase tracking-[0.2em] px-2 mb-2 ${theme === 'dark' ? 'text-violet-400/50' : 'text-slate-400'} sticky top-0 z-10 ${theme === 'dark' ? 'bg-[#0f0720]' : 'bg-white'}`}>Bulk Uploads</h4>
-                                        <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-2">
-                                            {history[appMode].some(e => e.type === 'bulk') ? (
-                                                history[appMode].filter(e => e.type === 'bulk').map(entry => (
-                                                    <div key={entry.id} onClick={() => loadHistorySession(entry)} className={`p-2.5 rounded-xl border ${theme === 'dark' ? 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-violet-500/50' : 'bg-black/5 border-black/10 hover:bg-black/10 hover:border-violet-500/50'} transition-all cursor-pointer group/item active:scale-95`}>
-                                                        <div className="flex items-center justify-between mb-1">
-                                                            <div className="flex items-center gap-1 opacity-40"><Clock className="w-2.5 h-2.5" /><span className="text-[9px]">{new Date(entry.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span></div>
-                                                        </div>
-                                                        <p className={`text-[12px] font-bold ${theme === 'dark' ? 'text-violet-100 group-hover/item:text-violet-400' : 'text-slate-700 group-hover/item:text-violet-600'} truncate mb-0.5`}>{formatHistoryInput(entry)}</p>
-                                                        <div className="flex flex-col gap-1 mt-1">
-                                                            <div className="flex items-center gap-2">
-                                                                <p className={`text-[10px] font-mono ${entry.status.toLowerCase().includes('fail') ? 'text-rose-500' : 'text-emerald-500'} truncate`}>{formatHistoryResult(entry.result)}</p>
-                                                                {entry.hasCached && (
-                                                                    <span className={`text-[7px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border transition-all ${theme === 'dark' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' : 'bg-violet-50 text-violet-600 border-violet-200'}`}>Already Processed</span>
-                                                                )}
-                                                                {entry.synced && (
-                                                                    <span className={`text-[7px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border transition-all ${theme === 'dark' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-200'}`}>Synced</span>
-                                                                )}
-                                                            </div>
-                                                            {entry.hasCached && entry.cachedAt && (
-                                                                <span className={`text-[8px] font-medium opacity-50 ${theme === 'dark' ? 'text-violet-300' : 'text-slate-500'}`}>
-                                                                    Ran on {new Date(entry.cachedAt).toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}  {entry.cachedType ? `via ${entry.cachedType === 'bulk' ? 'Bulk Upload' : 'Single Try'}` : ''}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                ))
-                                            ) : (
-                                                <div className="text-center py-6 opacity-20 text-[8px] uppercase font-bold tracking-widest">None</div>
-                                            )}
-                                        </div>
+                    appMode === 'event-scraper' ? (
+                        <div className="w-full max-w-4xl mx-auto space-y-8">
+                            {/* URL Input Section */}
+                            <div className={`${themeClasses.card} p-8 rounded-[2rem] border border-violet-800/10 shadow-xl text-center relative overflow-hidden`}>
+                                {isScraping && (
+                                    <div className={`absolute inset-0 z-20 flex flex-col items-center justify-center backdrop-blur-sm ${theme === 'dark' ? 'bg-black/60' : 'bg-white/60'} animate-fade-in`}>
+                                        <Loader2 className="w-10 h-10 animate-spin text-emerald-500 mb-3" />
+                                        <h4 className={`text-lg font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Scanning Page...</h4>
+                                        <p className={`text-sm ${theme === 'dark' ? 'text-violet-300' : 'text-slate-600'} mt-1`}>This may take a few moments.</p>
                                     </div>
-
-                                    {/* Single Section */}
-                                    <div className="flex-1 flex flex-col min-w-0">
-                                        <h4 className={`text-[8px] font-black uppercase tracking-[0.2em] px-2 mb-2 ${theme === 'dark' ? 'text-violet-400/50' : 'text-slate-400'} sticky top-0 z-10 ${theme === 'dark' ? 'bg-[#0f0720]' : 'bg-white'}`}>Single Try</h4>
-                                        <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-2">
-                                            {history[appMode].some(e => e.type === 'single') ? (
-                                                history[appMode].filter(e => e.type === 'single').map(entry => (
-                                                    <div key={entry.id} onClick={() => loadHistorySession(entry)} className={`p-2.5 rounded-xl border ${theme === 'dark' ? 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-violet-500/50' : 'bg-black/5 border-black/10 hover:bg-black/10 hover:border-violet-500/50'} transition-all cursor-pointer group/item active:scale-95`}>
-                                                        <div className="flex items-center justify-between mb-1">
-                                                            <div className="flex items-center gap-1 opacity-40"><Clock className="w-2.5 h-2.5" /><span className="text-[9px]">{new Date(entry.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span></div>
-                                                        </div>
-                                                        <p className={`text-[12px] font-bold ${theme === 'dark' ? 'text-violet-100 group-hover/item:text-violet-400' : 'text-slate-700 group-hover/item:text-violet-600'} truncate mb-0.5`}>{formatHistoryInput(entry)}</p>
-                                                        <div className="flex flex-col gap-1 mt-1">
-                                                            <div className="flex items-center gap-2">
-                                                                <p className={`text-[10px] font-mono ${entry.status.toLowerCase().includes('fail') ? 'text-rose-500' : 'text-emerald-500'} truncate`}>{formatHistoryResult(entry.result)}</p>
-                                                                {entry.hasCached && (
-                                                                    <span className={`text-[7px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border transition-all ${theme === 'dark' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' : 'bg-violet-50 text-violet-600 border-violet-200'}`}>Already Processed</span>
-                                                                )}
-                                                                {entry.synced && (
-                                                                    <span className={`text-[7px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border transition-all ${theme === 'dark' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-200'}`}>Synced</span>
-                                                                )}
-                                                            </div>
-                                                            {entry.hasCached && entry.cachedAt && (
-                                                                <span className={`text-[8px] font-medium opacity-50 ${theme === 'dark' ? 'text-violet-300' : 'text-slate-500'}`}>
-                                                                    Ran on {new Date(entry.cachedAt).toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}  {entry.cachedType ? `via ${entry.cachedType === 'bulk' ? 'Bulk Upload' : 'Single Try'}` : ''}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                ))
-                                            ) : (
-                                                <div className="text-center py-6 opacity-20 text-[8px] uppercase font-bold tracking-widest">None</div>
-                                            )}
-                                        </div>
-                                    </div>
+                                )}
+                                <div className="flex flex-col items-center mb-6">
+                                    <div className="bg-emerald-600/10 p-3 rounded-2xl mb-3"><Globe className="w-8 h-8 text-emerald-600" /></div>
+                                    <h3 className={`text-2xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Event Web Scraper</h3>
+                                    <p className={`${theme === 'dark' ? 'text-violet-300/60' : 'text-slate-500'} mt-2 max-w-md`}>Enter an event page URL to automatically extract speakers and attendees for enrichment.</p>
                                 </div>
 
-                                {/* App Note to cover the space */}
-                                <div className={`mt-auto p-4 rounded-2xl border ${theme === 'dark' ? 'bg-violet-900/20 border-violet-800/30' : 'bg-violet-50 border-violet-200'} shrink-0`}>
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <Info className="w-3.5 h-3.5 text-violet-500" />
-                                        <span className={`text-[11px] font-black uppercase tracking-widest ${theme === 'dark' ? 'text-violet-300' : 'text-violet-700'}`}>Pro Insight</span>
-                                    </div>
-                                    <p className={`text-[11px] leading-relaxed ${theme === 'dark' ? 'text-violet-400/80' : 'text-slate-600'}`}>
-                                        10xMailMatch is your ultimate intelligence layer for lead generation. Powered by Gemini & GetProspect, we seamlessly enrich outreach with verified business emails and LinkedIn profiles.
-                                    </p>
+                                <div className="relative max-w-2xl mx-auto">
+                                    <input
+                                        type="url"
+                                        placeholder="https://example.com/event-page"
+                                        className={`w-full pl-6 pr-32 py-4 ${themeClasses.input} rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 transition-all text-sm shadow-inner`}
+                                        value={eventUrl}
+                                        onChange={(e) => setEventUrl(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && handleScrape()}
+                                        disabled={isScraping}
+                                    />
+                                    <button
+                                        onClick={handleScrape}
+                                        disabled={isScraping || !eventUrl}
+                                        className="absolute right-2 top-2 bottom-2 px-6 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold rounded-xl transition-all shadow-lg flex items-center gap-2 text-xs"
+                                    >
+                                        {isScraping ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Scrape Page'}
+                                    </button>
                                 </div>
                             </div>
+
+                            {/* Scraped Results Section */}
+                            {scrapedSpeakers.length > 0 && (
+                                <div className={`${themeClasses.card} rounded-[2rem] overflow-hidden flex flex-col shadow-2xl animate-fade-in`}>
+                                    <div className={`px-8 py-6 border-b ${theme === 'dark' ? 'border-white/10' : 'border-black/5'} flex justify-between items-center bg-emerald-600/5`}>
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2 bg-emerald-600 rounded-lg shadow-lg shadow-emerald-600/20"><Users className="w-5 h-5 text-white" /></div>
+                                            <div>
+                                                <h4 className={`font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Scraped Leads</h4>
+                                                <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">{scrapedSpeakers.length} Found</span>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={handleProcessLeads}
+                                            className="px-6 py-2.5 bg-violet-600 hover:bg-violet-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-violet-600/30 flex items-center gap-2 text-xs"
+                                        >
+                                            Process Leads <ArrowRight className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                    <div className="max-h-[500px] overflow-y-auto custom-scrollbar p-0">
+                                        <table className="w-full text-left border-collapse">
+                                            <thead className={`sticky top-0 z-10 ${theme === 'dark' ? 'bg-[#0f0720]' : 'bg-white'}`}>
+                                                <tr>
+                                                    <th className={`px-6 py-4 text-[10px] font-bold ${themeClasses.label} uppercase tracking-[0.2em] border-b ${theme === 'dark' ? 'border-white/10' : 'border-slate-100'}`}>Name</th>
+                                                    <th className={`px-6 py-4 text-[10px] font-bold ${themeClasses.label} uppercase tracking-[0.2em] border-b ${theme === 'dark' ? 'border-white/10' : 'border-slate-100'}`}>Company</th>
+                                                    <th className={`px-6 py-4 text-[10px] font-bold ${themeClasses.label} uppercase tracking-[0.2em] border-b ${theme === 'dark' ? 'border-white/10' : 'border-slate-100'}`}>Role</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {scrapedSpeakers.map((speaker, i) => (
+                                                    <tr key={i} className={`group ${theme === 'dark' ? 'hover:bg-white/5' : 'hover:bg-slate-50'} transition-colors border-b ${theme === 'dark' ? 'border-white/5' : 'border-slate-50'} last:border-0`}>
+                                                        <td className={`px-6 py-3 text-sm font-bold ${theme === 'dark' ? 'text-violet-100' : 'text-slate-700'}`}>{speaker.name}</td>
+                                                        <td className={`px-6 py-3 text-sm ${theme === 'dark' ? 'text-violet-300' : 'text-slate-600'}`}>{speaker.company || '—'}</td>
+                                                        <td className={`px-6 py-3 text-xs font-mono opacity-70 ${theme === 'dark' ? 'text-violet-400' : 'text-slate-500'}`}>{speaker.role || '—'}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
                         </div>
-                        <div className="lg:col-span-3 flex flex-col items-center">
-                            <div className={`mb-1 p-1.5 rounded-2xl border ${theme === 'dark' ? 'bg-violet-900/20 border-violet-800/40' : 'bg-white border-amber-100'} flex gap-1 shadow-sm`}>
-                                <button onClick={() => setInputMode('bulk')} className={`px-8 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${inputMode === 'bulk' ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/30' : theme === 'dark' ? 'text-violet-400 hover:bg-violet-900/30' : 'text-slate-500 hover:bg-slate-50'}`}><Layers className="w-4 h-4" /> Bulk Upload</button>
-                                <button onClick={() => setInputMode('single')} className={`px-8 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${inputMode === 'single' ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/30' : theme === 'dark' ? 'text-violet-400 hover:bg-violet-900/30' : 'text-slate-500 hover:bg-slate-50'}`}><MousePointer2 className="w-4 h-4" /> Single Try</button>
-                            </div>
-                            <AnimatePresence mode="wait">
-                                {inputMode === 'bulk' ? (
-                                    <motion.div key="bulk" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className={`w-full flex flex-col items-center justify-center py-8 ${themeClasses.card} rounded-[2rem] border-2 border-dashed ${theme === 'dark' ? 'border-violet-800/40 hover:border-violet-500' : 'border-slate-300 hover:border-violet-400'} transition-all group cursor-pointer relative`}>
-                                        <div className={`${theme === 'dark' ? 'bg-violet-900/30' : 'bg-violet-50'} p-5 rounded-2xl mb-4 group-hover:scale-110 transition-transform shadow-xl`}>{appMode === 'enrich' ? <Search className="w-10 h-10 text-violet-600" /> : appMode === 'linkedin' ? <Linkedin className="w-10 h-10 text-blue-500" /> : <ShieldCheck className="w-10 h-10 text-violet-600" />}</div>
-                                        <p className={`${theme === 'dark' ? 'text-violet-300/60' : 'text-slate-500'} mb-6 text-center text-sm max-w-md`}>Upload your prospect lists (Excel/CSV) to start the {appMode === 'enrich' ? 'enrichment' : appMode === 'linkedin' ? 'LinkedIn search' : 'verification'} process.</p>
-                                        <div className="flex flex-col sm:flex-row gap-4 items-center">
-                                            <label className="bg-violet-600 hover:bg-violet-500 text-white font-bold py-3 px-8 rounded-2xl cursor-pointer transition-all shadow-xl hover:shadow-violet-600/30">Select Spreadsheet<input type="file" className="hidden" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} /></label>
-                                            {appMode === 'verify' && resultsFromFinder.length > 0 && <button onClick={(e) => { e.stopPropagation(); handleImportFromFinder(); }} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-6 rounded-2xl transition-all shadow-xl hover:shadow-emerald-600/30 flex items-center gap-2"><ArrowLeftRight className="w-4 h-4" /> Use Found Emails</button>}
-                                        </div>
-                                    </motion.div>
-                                ) : (
-                                    <motion.div key="single" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className={`w-full max-w-2xl ${themeClasses.card} p-8 rounded-[2rem] border border-violet-800/10 shadow-xl overflow-hidden`}>
-                                        <div className="flex items-center justify-between mb-6">
-                                            <div className="w-10" /> {/* Spacer */}
-                                            <div className="flex flex-col items-center text-center">
-                                                <div className="bg-violet-600/10 p-2.5 rounded-xl mb-2"><Zap className="w-6 h-6 text-violet-600" /></div>
-                                                <h3 className={`text-2xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Individual {appMode === 'verify' ? 'Check' : 'Search'}</h3>
-                                                {singleResult && isHistoryView && appMode === 'enrich' && (
-                                                    <button
-                                                        onClick={handleGetApiResults}
-                                                        className="mt-3 flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all font-bold text-xs shadow-lg"
-                                                    >
-                                                        <Webhook className="w-4 h-4" /> Get API Results
-                                                    </button>
+                    ) : (
+                        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
+                            <div className="lg:col-span-2 space-y-4">
+                                <div className={`${themeClasses.card} p-5 rounded-3xl overflow-hidden flex flex-col h-[calc(100vh-18rem)] min-h-[550px]`}>
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <HistoryIcon className="w-4 h-4 text-violet-500" />
+                                        <h3 className={`text-sm font-black uppercase tracking-widest ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Recent activity</h3>
+                                    </div>
+                                    <div className="flex gap-4 flex-1 overflow-hidden mb-4">
+                                        {/* Bulk Section */}
+                                        <div className="flex-1 flex flex-col min-w-0">
+                                            <h4 className={`text-[8px] font-black uppercase tracking-[0.2em] px-2 mb-2 ${theme === 'dark' ? 'text-violet-400/50' : 'text-slate-400'} sticky top-0 z-10 ${theme === 'dark' ? 'bg-[#0f0720]' : 'bg-white'}`}>Bulk Uploads</h4>
+                                            <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-2">
+                                                {history[appMode].some(e => e.type === 'bulk') ? (
+                                                    history[appMode].filter(e => e.type === 'bulk').map(entry => (
+                                                        <div key={entry.id} onClick={() => loadHistorySession(entry)} className={`p-2.5 rounded-xl border ${theme === 'dark' ? 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-violet-500/50' : 'bg-black/5 border-black/10 hover:bg-black/10 hover:border-violet-500/50'} transition-all cursor-pointer group/item active:scale-95`}>
+                                                            <div className="flex items-center justify-between mb-1">
+                                                                <div className="flex items-center gap-1 opacity-40"><Clock className="w-2.5 h-2.5" /><span className="text-[9px]">{new Date(entry.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span></div>
+                                                            </div>
+                                                            <p className={`text-[12px] font-bold ${theme === 'dark' ? 'text-violet-100 group-hover/item:text-violet-400' : 'text-slate-700 group-hover/item:text-violet-600'} truncate mb-0.5`}>{formatHistoryInput(entry)}</p>
+                                                            <div className="flex flex-col gap-1 mt-1">
+                                                                <div className="flex items-center gap-2">
+                                                                    <p className={`text-[10px] font-mono ${entry.status.toLowerCase().includes('fail') ? 'text-rose-500' : 'text-emerald-500'} truncate`}>{formatHistoryResult(entry.result)}</p>
+                                                                    {entry.hasCached && (
+                                                                        <span className={`text-[7px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border transition-all ${theme === 'dark' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' : 'bg-violet-50 text-violet-600 border-violet-200'}`}>Already Processed</span>
+                                                                    )}
+                                                                    {entry.synced && (
+                                                                        <span className={`text-[7px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border transition-all ${theme === 'dark' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-200'}`}>Synced</span>
+                                                                    )}
+                                                                </div>
+                                                                {entry.hasCached && entry.cachedAt && (
+                                                                    <span className={`text-[8px] font-medium opacity-50 ${theme === 'dark' ? 'text-violet-300' : 'text-slate-500'}`}>
+                                                                        Ran on {new Date(entry.cachedAt).toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}  {entry.cachedType ? `via ${entry.cachedType === 'bulk' ? 'Bulk Upload' : 'Single Try'}` : ''}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    ))
+                                                ) : (
+                                                    <div className="text-center py-6 opacity-20 text-[8px] uppercase font-bold tracking-widest">None</div>
                                                 )}
                                             </div>
-                                            <button
-                                                onClick={() => { setSingleName(''); setSingleCompany(''); setSingleEmail(''); setSingleResult(null); setIsHistoryView(false); }}
-                                                className={`text-[10px] font-bold uppercase tracking-widest px-3 py-2 rounded-lg transition-all ${theme === 'dark' ? 'text-rose-400 hover:bg-rose-500/10' : 'text-rose-600 hover:bg-rose-50'}`}
-                                            >
-                                                Clear All
-                                            </button>
                                         </div>
-                                        <div className="space-y-4">
-                                            {appMode === 'enrich' || appMode === 'linkedin' ? (
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                    <div className="space-y-1.5">
-                                                        <label className={`block text-[11px] font-bold ${themeClasses.label} uppercase tracking-widest ml-1`}>Name</label>
-                                                        <div className="relative">
-                                                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                                                <User className={`h-5 w-5 ${theme === 'dark' ? 'text-violet-400/50' : 'text-slate-400'}`} />
+
+                                        {/* Single Section */}
+                                        <div className="flex-1 flex flex-col min-w-0">
+                                            <h4 className={`text-[8px] font-black uppercase tracking-[0.2em] px-2 mb-2 ${theme === 'dark' ? 'text-violet-400/50' : 'text-slate-400'} sticky top-0 z-10 ${theme === 'dark' ? 'bg-[#0f0720]' : 'bg-white'}`}>Single Try</h4>
+                                            <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-2">
+                                                {history[appMode].some(e => e.type === 'single') ? (
+                                                    history[appMode].filter(e => e.type === 'single').map(entry => (
+                                                        <div key={entry.id} onClick={() => loadHistorySession(entry)} className={`p-2.5 rounded-xl border ${theme === 'dark' ? 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-violet-500/50' : 'bg-black/5 border-black/10 hover:bg-black/10 hover:border-violet-500/50'} transition-all cursor-pointer group/item active:scale-95`}>
+                                                            <div className="flex items-center justify-between mb-1">
+                                                                <div className="flex items-center gap-1 opacity-40"><Clock className="w-2.5 h-2.5" /><span className="text-[9px]">{new Date(entry.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span></div>
                                                             </div>
-                                                            <input type="text" className={`w-full pl-10 pr-10 py-3.5 ${themeClasses.input} rounded-xl outline-none focus:ring-2 focus:ring-violet-600 transition-all text-sm`} value={singleName} onChange={(e) => setSingleName(e.target.value)} />
-                                                            {singleName && (
-                                                                <button onClick={() => setSingleName('')} className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-rose-500 transition-colors">
-                                                                    <X className="w-4 h-4" />
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                    <div className="space-y-1.5">
-                                                        <label className={`block text-[11px] font-bold ${themeClasses.label} uppercase tracking-widest ml-1`}>Company/Domain</label>
-                                                        <div className="relative">
-                                                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                                                <Building2 className={`h-5 w-5 ${theme === 'dark' ? 'text-violet-400/50' : 'text-slate-400'}`} />
+                                                            <p className={`text-[12px] font-bold ${theme === 'dark' ? 'text-violet-100 group-hover/item:text-violet-400' : 'text-slate-700 group-hover/item:text-violet-600'} truncate mb-0.5`}>{formatHistoryInput(entry)}</p>
+                                                            <div className="flex flex-col gap-1 mt-1">
+                                                                <div className="flex items-center gap-2">
+                                                                    <p className={`text-[10px] font-mono ${entry.status.toLowerCase().includes('fail') ? 'text-rose-500' : 'text-emerald-500'} truncate`}>{formatHistoryResult(entry.result)}</p>
+                                                                    {entry.hasCached && (
+                                                                        <span className={`text-[7px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border transition-all ${theme === 'dark' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' : 'bg-violet-50 text-violet-600 border-violet-200'}`}>Already Processed</span>
+                                                                    )}
+                                                                    {entry.synced && (
+                                                                        <span className={`text-[7px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border transition-all ${theme === 'dark' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-200'}`}>Synced</span>
+                                                                    )}
+                                                                </div>
+                                                                {entry.hasCached && entry.cachedAt && (
+                                                                    <span className={`text-[8px] font-medium opacity-50 ${theme === 'dark' ? 'text-violet-300' : 'text-slate-500'}`}>
+                                                                        Ran on {new Date(entry.cachedAt).toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}  {entry.cachedType ? `via ${entry.cachedType === 'bulk' ? 'Bulk Upload' : 'Single Try'}` : ''}
+                                                                    </span>
+                                                                )}
                                                             </div>
-                                                            <input type="text" className={`w-full pl-10 pr-10 py-3.5 ${themeClasses.input} rounded-xl outline-none focus:ring-2 focus:ring-violet-600 transition-all text-sm`} value={singleCompany} onChange={(e) => setSingleCompany(e.target.value)} />
-                                                            {singleCompany && (
-                                                                <button onClick={() => setSingleCompany('')} className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-rose-500 transition-colors">
-                                                                    <X className="w-4 h-4" />
-                                                                </button>
-                                                            )}
                                                         </div>
-                                                    </div>
+                                                    ))
+                                                ) : (
+                                                    <div className="text-center py-6 opacity-20 text-[8px] uppercase font-bold tracking-widest">None</div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* App Note to cover the space */}
+                                    <div className={`mt-auto p-4 rounded-2xl border ${theme === 'dark' ? 'bg-violet-900/20 border-violet-800/30' : 'bg-violet-50 border-violet-200'} shrink-0`}>
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <Info className="w-3.5 h-3.5 text-violet-500" />
+                                            <span className={`text-[11px] font-black uppercase tracking-widest ${theme === 'dark' ? 'text-violet-300' : 'text-violet-700'}`}>Pro Insight</span>
+                                        </div>
+                                        <p className={`text-[11px] leading-relaxed ${theme === 'dark' ? 'text-violet-400/80' : 'text-slate-600'}`}>
+                                            10xMailMatch is your ultimate intelligence layer for lead generation. Powered by Gemini & GetProspect, we seamlessly enrich outreach with verified business emails and LinkedIn profiles.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="lg:col-span-3 flex flex-col items-center">
+                                <div className={`mb-1 p-1.5 rounded-2xl border ${theme === 'dark' ? 'bg-violet-900/20 border-violet-800/40' : 'bg-white border-amber-100'} flex gap-1 shadow-sm`}>
+                                    <button onClick={() => setInputMode('bulk')} className={`px-8 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${inputMode === 'bulk' ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/30' : theme === 'dark' ? 'text-violet-400 hover:bg-violet-900/30' : 'text-slate-500 hover:bg-slate-50'}`}><Layers className="w-4 h-4" /> Bulk Upload</button>
+                                    <button onClick={() => setInputMode('single')} className={`px-8 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${inputMode === 'single' ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/30' : theme === 'dark' ? 'text-violet-400 hover:bg-violet-900/30' : 'text-slate-500 hover:bg-slate-50'}`}><MousePointer2 className="w-4 h-4" /> Single Try</button>
+                                </div>
+                                <AnimatePresence mode="wait">
+                                    {inputMode === 'bulk' ? (
+                                        <motion.div key="bulk" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className={`w-full flex flex-col items-center justify-center py-8 ${themeClasses.card} rounded-[2rem] border-2 border-dashed ${theme === 'dark' ? 'border-violet-800/40 hover:border-violet-500' : 'border-slate-300 hover:border-violet-400'} transition-all group cursor-pointer relative`}>
+                                            <div className={`${theme === 'dark' ? 'bg-violet-900/30' : 'bg-violet-50'} p-5 rounded-2xl mb-4 group-hover:scale-110 transition-transform shadow-xl`}>{appMode === 'enrich' ? <Search className="w-10 h-10 text-violet-600" /> : appMode === 'linkedin' ? <Linkedin className="w-10 h-10 text-blue-500" /> : <ShieldCheck className="w-10 h-10 text-violet-600" />}</div>
+                                            <p className={`${theme === 'dark' ? 'text-violet-300/60' : 'text-slate-500'} mb-6 text-center text-sm max-w-md`}>Upload your prospect lists (Excel/CSV) to start the {appMode === 'enrich' ? 'enrichment' : appMode === 'linkedin' ? 'LinkedIn search' : 'verification'} process.</p>
+                                            <div className="flex flex-col sm:flex-row gap-4 items-center">
+                                                <label className="bg-violet-600 hover:bg-violet-500 text-white font-bold py-3 px-8 rounded-2xl cursor-pointer transition-all shadow-xl hover:shadow-violet-600/30">Select Spreadsheet<input type="file" className="hidden" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} /></label>
+                                                {appMode === 'verify' && resultsFromFinder.length > 0 && <button onClick={(e) => { e.stopPropagation(); handleImportFromFinder(); }} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-6 rounded-2xl transition-all shadow-xl hover:shadow-emerald-600/30 flex items-center gap-2"><ArrowLeftRight className="w-4 h-4" /> Use Found Emails</button>}
+                                                {lastScrapedResults.length > 0 && (appMode === 'linkedin' || appMode === 'enrich') && <button onClick={(e) => { e.stopPropagation(); handleImportFromScraper(appMode === 'linkedin' ? 'linkedin' : 'enrich'); }} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-6 rounded-2xl transition-all shadow-xl hover:shadow-emerald-600/30 flex items-center gap-2"><ArrowLeftRight className="w-4 h-4" /> Use Scraped Results</button>}
+                                            </div>
+                                        </motion.div>
+                                    ) : (
+                                        <motion.div key="single" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className={`w-full max-w-2xl ${themeClasses.card} p-8 rounded-[2rem] border border-violet-800/10 shadow-xl overflow-hidden`}>
+                                            <div className="flex items-center justify-between mb-6">
+                                                <div className="w-10" /> {/* Spacer */}
+                                                <div className="flex flex-col items-center text-center">
+                                                    <div className="bg-violet-600/10 p-2.5 rounded-xl mb-2"><Zap className="w-6 h-6 text-violet-600" /></div>
+                                                    <h3 className={`text-2xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Individual {appMode === 'verify' ? 'Check' : 'Search'}</h3>
+                                                    {singleResult && isHistoryView && appMode === 'enrich' && (
+                                                        <button
+                                                            onClick={handleGetApiResults}
+                                                            className="mt-3 flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all font-bold text-xs shadow-lg"
+                                                        >
+                                                            <Webhook className="w-4 h-4" /> Get API Results
+                                                        </button>
+                                                    )}
                                                 </div>
-                                            ) : (
-                                                <div className="space-y-1.5">
-                                                    <label className={`block text-[11px] font-bold ${themeClasses.label} uppercase tracking-widest ml-1`}>Email</label>
-                                                    <div className="relative">
-                                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                                            <Mail className={`h-5 w-5 ${theme === 'dark' ? 'text-violet-400/50' : 'text-slate-400'}`} />
-                                                        </div>
-                                                        <input type="email" className={`w-full pl-10 pr-10 py-3.5 ${themeClasses.input} rounded-xl outline-none focus:ring-2 focus:ring-violet-600 transition-all text-sm`} value={singleEmail} onChange={(e) => setSingleEmail(e.target.value)} />
-                                                        {singleEmail && (
-                                                            <button onClick={() => setSingleEmail('')} className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-rose-500 transition-colors">
-                                                                <X className="w-4 h-4" />
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            )}
-                                            <button onClick={handleSingleAction} disabled={isProcessing} className="w-full py-4 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white font-bold rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 text-base">{isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : (appMode === 'enrich' ? 'Find Email' : appMode === 'linkedin' ? 'Find LinkedIn' : 'Verify Email')}</button>
-                                            {singleResult && (
-                                                <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className={`mt-4 p-4 rounded-2xl ${theme === 'dark' ? 'bg-violet-950/40 border-violet-800/40' : 'bg-white border-amber-100'} border flex flex-col items-center text-center`}>
-                                                    <div className="flex flex-col items-center gap-2 w-full">
-                                                        {singleResult.email && <div className="flex flex-col items-center w-full"><span className={`text-[9px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1`}>Email Found</span><div className="flex items-center gap-2 w-full justify-center"><span className={`text-sm font-mono font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'} px-3 py-1.5 bg-violet-600/10 rounded-lg break-all`}>{singleResult.email}</span><button onClick={() => copyToClipboard(singleResult.email!)} className="p-1.5 hover:bg-violet-600/10 rounded-md text-violet-600"><Copy className="w-4 h-4" /></button></div></div>}
-                                                        {singleResult.linkedinUrl && <div className="flex flex-col items-center w-full"><span className={`text-[9px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1`}>LinkedIn Profile</span><div className="flex items-center gap-2 w-full justify-center"><a href={singleResult.linkedinUrl} target="_blank" rel="noreferrer" className={`text-sm font-mono font-bold text-blue-500 hover:underline px-3 py-1.5 bg-blue-500/10 rounded-lg flex items-center gap-1.5 break-all`}>View Profile <ExternalLink className="w-3.5 h-3.5" /></a><button onClick={() => copyToClipboard(singleResult.linkedinUrl!)} className="p-1.5 hover:bg-blue-600/10 rounded-md text-blue-500"><Copy className="w-4 h-4" /></button></div></div>}
-                                                    </div>
-                                                    <div className="mt-2 flex flex-col items-center">
-                                                        <span className={`text-[9px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1`}>Status</span>
-                                                        <div className="flex flex-col gap-1">
-                                                            <div className="flex items-center gap-2">
-                                                                <div className={`inline-flex items-center justify-center gap-1 text-[9px] font-black uppercase tracking-[0.1em] px-3 py-1 rounded-full border shadow-sm min-w-[120px] ${singleResult.status === 'completed' || singleResult.status === 'deliverable' || singleResult.status === 'found' ? 'text-green-700 bg-green-100 border-green-200' : (singleResult.status === 'undeliverable' || singleResult.status === 'failed' ? 'text-rose-700 bg-rose-100 border-rose-200' : 'text-amber-700 bg-amber-100 border-amber-200')}`}>{singleResult.status === 'deliverable' ? 'VALID' : (singleResult.status === 'undeliverable' ? 'INVALID' : (singleResult.status || 'FAILED'))}</div>
-                                                                {(singleResult.status === 'failed' || singleResult.status === 'undeliverable' || singleResult.status === 'not_found') && (
-                                                                    <button
-                                                                        onClick={handleSingleRetry}
-                                                                        disabled={isProcessing}
-                                                                        className={`p-1.5 rounded-lg transition-all ${theme === 'dark' ? 'bg-violet-900/40 hover:bg-violet-900/60 text-violet-400' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'} disabled:opacity-50`}
-                                                                        title="Retry fresh API call"
-                                                                    >
-                                                                        <RotateCw className={cn("w-3.5 h-3.5", isProcessing && "animate-spin")} />
+                                                <button
+                                                    onClick={() => { setSingleName(''); setSingleCompany(''); setSingleEmail(''); setSingleResult(null); setIsHistoryView(false); }}
+                                                    className={`text-[10px] font-bold uppercase tracking-widest px-3 py-2 rounded-lg transition-all ${theme === 'dark' ? 'text-rose-400 hover:bg-rose-500/10' : 'text-rose-600 hover:bg-rose-50'}`}
+                                                >
+                                                    Clear All
+                                                </button>
+                                            </div>
+                                            <div className="space-y-4">
+                                                {appMode === 'enrich' || appMode === 'linkedin' ? (
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        <div className="space-y-1.5">
+                                                            <label className={`block text-[11px] font-bold ${themeClasses.label} uppercase tracking-widest ml-1`}>Name</label>
+                                                            <div className="relative">
+                                                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                                    <User className={`h-5 w-5 ${theme === 'dark' ? 'text-violet-400/50' : 'text-slate-400'}`} />
+                                                                </div>
+                                                                <input type="text" className={`w-full pl-10 pr-10 py-3.5 ${themeClasses.input} rounded-xl outline-none focus:ring-2 focus:ring-violet-600 transition-all text-sm`} value={singleName} onChange={(e) => setSingleName(e.target.value)} />
+                                                                {singleName && (
+                                                                    <button onClick={() => setSingleName('')} className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-rose-500 transition-colors">
+                                                                        <X className="w-4 h-4" />
                                                                     </button>
                                                                 )}
                                                             </div>
-                                                            {singleResult.metadata?.cached && (
-                                                                <div className="flex flex-col items-center gap-1">
-                                                                    <div className={`inline-flex items-center justify-center gap-1 text-[7px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border ${theme === 'dark' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' : 'bg-violet-50 text-violet-600 border-violet-200'}`}>
-                                                                        Already Processed
-                                                                    </div>
-                                                                    {singleResult.metadata?.synced && (
-                                                                        <div className={`inline-flex items-center justify-center gap-1 text-[7px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border transition-all ${theme === 'dark' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-200'}`}>
-                                                                            Synced
-                                                                        </div>
-                                                                    )}
-                                                                    {singleResult.cachedAt && (
-                                                                        <span className={`text-[8px] font-medium opacity-60 ${theme === 'dark' ? 'text-violet-300' : 'text-slate-500'}`}>
-                                                                            Ran on {new Date(singleResult.cachedAt).toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })} {singleResult.cachedType ? `via ${singleResult.cachedType === 'bulk' ? 'Bulk Upload' : 'Single Try'}` : ''}
-                                                                        </span>
-                                                                    )}
+                                                        </div>
+                                                        <div className="space-y-1.5">
+                                                            <label className={`block text-[11px] font-bold ${themeClasses.label} uppercase tracking-widest ml-1`}>Company/Domain</label>
+                                                            <div className="relative">
+                                                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                                    <Building2 className={`h-5 w-5 ${theme === 'dark' ? 'text-violet-400/50' : 'text-slate-400'}`} />
                                                                 </div>
+                                                                <input type="text" className={`w-full pl-10 pr-10 py-3.5 ${themeClasses.input} rounded-xl outline-none focus:ring-2 focus:ring-violet-600 transition-all text-sm`} value={singleCompany} onChange={(e) => setSingleCompany(e.target.value)} />
+                                                                {singleCompany && (
+                                                                    <button onClick={() => setSingleCompany('')} className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-rose-500 transition-colors">
+                                                                        <X className="w-4 h-4" />
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="space-y-1.5">
+                                                        <label className={`block text-[11px] font-bold ${themeClasses.label} uppercase tracking-widest ml-1`}>Email</label>
+                                                        <div className="relative">
+                                                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                                <Mail className={`h-5 w-5 ${theme === 'dark' ? 'text-violet-400/50' : 'text-slate-400'}`} />
+                                                            </div>
+                                                            <input type="email" className={`w-full pl-10 pr-10 py-3.5 ${themeClasses.input} rounded-xl outline-none focus:ring-2 focus:ring-violet-600 transition-all text-sm`} value={singleEmail} onChange={(e) => setSingleEmail(e.target.value)} />
+                                                            {singleEmail && (
+                                                                <button onClick={() => setSingleEmail('')} className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-rose-500 transition-colors">
+                                                                    <X className="w-4 h-4" />
+                                                                </button>
                                                             )}
                                                         </div>
                                                     </div>
+                                                )}
+                                                <button onClick={handleSingleAction} disabled={isProcessing} className="w-full py-4 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white font-bold rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 text-base">{isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : (appMode === 'enrich' ? 'Find Email' : appMode === 'linkedin' ? 'Find LinkedIn' : 'Verify Email')}</button>
+                                                {singleResult && (
+                                                    <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className={`mt-4 p-4 rounded-2xl ${theme === 'dark' ? 'bg-violet-950/40 border-violet-800/40' : 'bg-white border-amber-100'} border flex flex-col items-center text-center`}>
+                                                        <div className="flex flex-col items-center gap-2 w-full">
+                                                            {singleResult.email && <div className="flex flex-col items-center w-full"><span className={`text-[9px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1`}>Email Found</span><div className="flex items-center gap-2 w-full justify-center"><span className={`text-sm font-mono font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'} px-3 py-1.5 bg-violet-600/10 rounded-lg break-all`}>{singleResult.email}</span><button onClick={() => copyToClipboard(singleResult.email!)} className="p-1.5 hover:bg-violet-600/10 rounded-md text-violet-600"><Copy className="w-4 h-4" /></button></div></div>}
+                                                            {singleResult.linkedinUrl && <div className="flex flex-col items-center w-full"><span className={`text-[9px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1`}>LinkedIn Profile</span><div className="flex items-center gap-2 w-full justify-center"><a href={singleResult.linkedinUrl} target="_blank" rel="noreferrer" className={`text-sm font-mono font-bold text-blue-500 hover:underline px-3 py-1.5 bg-blue-500/10 rounded-lg flex items-center gap-1.5 break-all`}>View Profile <ExternalLink className="w-3.5 h-3.5" /></a><button onClick={() => copyToClipboard(singleResult.linkedinUrl!)} className="p-1.5 hover:bg-blue-600/10 rounded-md text-blue-500"><Copy className="w-4 h-4" /></button></div></div>}
+                                                        </div>
+                                                        <div className="mt-2 flex flex-col items-center">
+                                                            <span className={`text-[9px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1`}>Status</span>
+                                                            <div className="flex flex-col gap-1">
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className={`inline-flex items-center justify-center gap-1 text-[9px] font-black uppercase tracking-[0.1em] px-3 py-1 rounded-full border shadow-sm min-w-[120px] ${singleResult.status === 'completed' || singleResult.status === 'deliverable' || singleResult.status === 'found' ? 'text-green-700 bg-green-100 border-green-200' : (singleResult.status === 'undeliverable' || singleResult.status === 'failed' ? 'text-rose-700 bg-rose-100 border-rose-200' : 'text-amber-700 bg-amber-100 border-amber-200')}`}>{singleResult.status === 'deliverable' ? 'VALID' : (singleResult.status === 'undeliverable' ? 'INVALID' : (singleResult.status || 'FAILED'))}</div>
+                                                                    {(singleResult.status === 'failed' || singleResult.status === 'undeliverable' || singleResult.status === 'not_found') && (
+                                                                        <button
+                                                                            onClick={handleSingleRetry}
+                                                                            disabled={isProcessing}
+                                                                            className={`p-1.5 rounded-lg transition-all ${theme === 'dark' ? 'bg-violet-900/40 hover:bg-violet-900/60 text-violet-400' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'} disabled:opacity-50`}
+                                                                            title="Retry fresh API call"
+                                                                        >
+                                                                            <RotateCw className={cn("w-3.5 h-3.5", isProcessing && "animate-spin")} />
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                                {singleResult.metadata?.cached && (
+                                                                    <div className="flex flex-col items-center gap-1">
+                                                                        <div className={`inline-flex items-center justify-center gap-1 text-[7px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border ${theme === 'dark' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' : 'bg-violet-50 text-violet-600 border-violet-200'}`}>
+                                                                            Already Processed
+                                                                        </div>
+                                                                        {singleResult.metadata?.synced && (
+                                                                            <div className={`inline-flex items-center justify-center gap-1 text-[7px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border transition-all ${theme === 'dark' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-200'}`}>
+                                                                                Synced
+                                                                            </div>
+                                                                        )}
+                                                                        {singleResult.cachedAt && (
+                                                                            <span className={`text-[8px] font-medium opacity-60 ${theme === 'dark' ? 'text-violet-300' : 'text-slate-500'}`}>
+                                                                                Ran on {new Date(singleResult.cachedAt).toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })} {singleResult.cachedType ? `via ${singleResult.cachedType === 'bulk' ? 'Bulk Upload' : 'Single Try'}` : ''}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
 
-                                                    {appMode === 'enrich' && !isHistoryView && (
-                                                        <button
-                                                            onClick={handleSingleApiExport}
-                                                            className={`mt-4 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all border ${theme === 'dark' ? 'bg-blue-900/20 border-blue-800/40 text-blue-400 hover:bg-blue-900/40' : 'bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100'}`}
-                                                        >
-                                                            <Webhook className="w-3 h-3" /> Sync to API
-                                                        </button>
-                                                    )}
-                                                </motion.div>
-                                            )}
-                                        </div>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
+                                                        {appMode === 'enrich' && !isHistoryView && (
+                                                            <button
+                                                                onClick={handleSingleApiExport}
+                                                                className={`mt-4 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all border ${theme === 'dark' ? 'bg-blue-900/20 border-blue-800/40 text-blue-400 hover:bg-blue-900/40' : 'bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100'}`}
+                                                            >
+                                                                <Webhook className="w-3 h-3" /> Sync to API
+                                                            </button>
+                                                        )}
+                                                    </motion.div>
+                                                )}
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
                         </div>
-                    </div>
+                    )
                 ) : (
                     <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 items-start">
                         <div className="lg:col-span-1 space-y-6">

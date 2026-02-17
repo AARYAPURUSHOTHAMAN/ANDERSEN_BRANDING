@@ -46,5 +46,18 @@ export interface HistoryEntry {
     synced?: boolean;
     hasCached?: boolean;
     cachedAt?: string;
+    cachedAt?: string;
     cachedType?: string;
+}
+
+export interface ScrapedSpeaker {
+    name: string;
+    company: string;
+    role?: string;
+}
+
+export interface ScrapeResult {
+    speakers: ScrapedSpeaker[];
+    success: boolean;
+    message?: string;
 }
