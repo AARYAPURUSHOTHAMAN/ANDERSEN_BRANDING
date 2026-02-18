@@ -1978,7 +1978,15 @@ const App: React.FC = () => {
                                                     <tr key={i} className={`group ${theme === 'dark' ? 'hover:bg-white/5' : 'hover:bg-black/5'} transition-colors`}>
                                                         {Object.keys(apiResponseData[0] || {}).map(k => (
                                                             <td key={`${i}-${k}`} className={`p-4 border-b ${theme === 'dark' ? 'border-white/10 text-violet-100' : 'border-slate-50 text-slate-800'}`}>
-                                                                {typeof row[k] === 'object' ? JSON.stringify(row[k]) : String(row[k])}
+                                                                {k === 'final_confidence' && !isNaN(Number(row[k])) ? (
+                                                                    `${(Number(row[k]) * 100).toFixed(0)}%`
+                                                                ) : row[k] === true || row[k] === 'true' ? (
+                                                                    <CheckCircle className="w-4 h-4 text-emerald-500" />
+                                                                ) : row[k] === false || row[k] === 'false' ? (
+                                                                    <XCircle className="w-4 h-4 text-rose-500" />
+                                                                ) : (
+                                                                    typeof row[k] === 'object' ? JSON.stringify(row[k]) : String(row[k])
+                                                                )}
                                                             </td>
                                                         ))}
                                                     </tr>
@@ -1999,7 +2007,15 @@ const App: React.FC = () => {
                                                 <tr key={k} className={`group ${theme === 'dark' ? 'hover:bg-white/5' : 'hover:bg-black/5'} transition-colors`}>
                                                     <td className={`p-3 border-b ${theme === 'dark' ? 'border-white/10 text-violet-400' : 'border-black/10 text-slate-600'} font-medium`}>{k}</td>
                                                     <td className={`p-3 border-b ${theme === 'dark' ? 'border-white/10 text-violet-100' : 'border-black/10 text-slate-800'}`}>
-                                                        {typeof v === 'object' ? JSON.stringify(v) : String(v)}
+                                                        {k === 'final_confidence' && !isNaN(Number(v)) ? (
+                                                            `${(Number(v) * 100).toFixed(0)}%`
+                                                        ) : v === true || v === 'true' ? (
+                                                            <CheckCircle className="w-4 h-4 text-emerald-500" />
+                                                        ) : v === false || v === 'false' ? (
+                                                            <XCircle className="w-4 h-4 text-rose-500" />
+                                                        ) : (
+                                                            typeof v === 'object' ? JSON.stringify(v) : String(v)
+                                                        )}
                                                     </td>
                                                 </tr>
                                             ))}
