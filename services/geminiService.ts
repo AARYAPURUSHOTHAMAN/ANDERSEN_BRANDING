@@ -49,7 +49,7 @@ export async function suggestMappings(headers: string[]): Promise<{ nameHeader: 
  */
 export async function findLinkedInUrl(name: string, company: string): Promise<{ url?: string; success: boolean; message?: string }> {
   const API_KEY = (import.meta as any).env?.VITE_LINKFINDER_KEY || '7eZ4cZ40Z7dZ3aZ3fZ74Z5aZ3dZ4eZ80Z75Z60Z6dZ69Z6c';
-  const API_URL = '/api-linkfinder';
+  const API_URL = 'https://api.linkfinderai.com';
 
   try {
     const response = await fetch(API_URL, {
