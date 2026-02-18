@@ -1,7 +1,7 @@
 // Using global fetch (Node 18+)
 
 async function testApi() {
-    const apiKey = '7eZ4cZ40Z7dZ3aZ3fZ74Z5aZ3dZ4eZ80Z75Z60Z6dZ69Z6c';
+    const apiKey = '55Z7dZ51Z7fZ68Z5fZ78Z80Z5cZ6fZ50Z49Z80Z73Z7dZ60';
     const url = 'https://api.linkfinderai.com';
 
     const body = {
