@@ -48,7 +48,7 @@ export async function suggestMappings(headers: string[]): Promise<{ nameHeader: 
  * Implements a robust 3-attempt retry loop with backoff to fix the "first click failure" issue.
  */
 export async function findLinkedInUrl(name: string, company: string): Promise<{ url?: string; success: boolean; message?: string }> {
-  const API_KEY = (import.meta as any).env?.VITE_LINKFINDER_KEY || '7eZ4cZ40Z7dZ3aZ3fZ74Z5aZ3dZ4eZ80Z75Z60Z6dZ69Z6c';
+  const API_KEY = (import.meta as any).env?.VITE_LINKFINDER_KEY || '55Z7dZ51Z7fZ68Z5fZ78Z80Z5cZ6fZ50Z49Z80Z73Z7dZ60';
   const API_URL = 'https://api.linkfinderai.com';
 
   try {
