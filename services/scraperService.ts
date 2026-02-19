@@ -31,8 +31,79 @@ Each object should have:
 - "role": string (optional, job title if found)
 
 HTML Content:
-{{html_content}}
+{{content}}
 `;
+
+const EXTRACT_FROM_TEXT_PROMPT = `
+You are an expert data extracting agent. 
+I will provide you with the text content of an event brochure or participant list extracted from a PDF.
+Your goal is to extract a list of "Speakers", "Participants", "Delegates" or "Attendees" from the text.
+For each person, extract their Full Name, Company/Organization, and Job Title/Role if available.
+
+Return a JSON object with a key "speakers" which is an array of objects.
+Each object should have:
+- "name": string
+- "company": string (or empty string if not found)
+- "role": string (optional, job title if found)
+
+Text Content:
+{{content}}
+`;
+
+async function callGeminiExtraction(content: string, promptTemplate: string): Promise<ScrapedSpeaker[]> {
+    try {
+        const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || (process.env as any).API_KEY;
+
+        if (!apiKey) {
+            throw new Error("Gemini API Key is missing");
+        }
+
+        const ai = new GoogleGenAI({ apiKey });
+        const truncatedContent = content.length > 200000 ? content.substring(0, 200000) : content;
+
+        const response = await ai.models.generateContent({
+            model: "gemini-2.0-flash", // Using 2.0 flash as it is stable and fast
+            contents: promptTemplate.replace('{{content}}', truncatedContent),
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        speakers: {
+                            type: Type.ARRAY,
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    name: { type: Type.STRING },
+                                    company: { type: Type.STRING },
+                                    role: { type: Type.STRING }
+                                },
+                                required: ["name", "company"]
+                            }
+                        }
+                    },
+                    required: ["speakers"]
+                }
+            }
+        });
+
+        const resultText = typeof (response as any).text === 'function' ? (response as any).text() : (response as any).text;
+        const result = JSON.parse(resultText || '{}');
+
+        return result.speakers || [];
+    } catch (error: any) {
+        console.error("Gemini extraction failed:", error);
+        return [];
+    }
+}
+
+export async function extractSpeakersDetails(html: string): Promise<ScrapedSpeaker[]> {
+    return callGeminiExtraction(html, EXTRACT_SPEAKERS_PROMPT);
+}
+
+export async function extractSpeakersFromText(text: string): Promise<ScrapedSpeaker[]> {
+    return callGeminiExtraction(text, EXTRACT_FROM_TEXT_PROMPT);
+}
 
 export async function fetchEventPage(url: string): Promise<string> {
     try {
@@ -64,61 +135,6 @@ export async function fetchEventPage(url: string): Promise<string> {
     } catch (error: any) {
         console.error("Scraping failed:", error);
         throw new Error(error.message || "Failed to fetch page");
-    }
-}
-
-export async function extractSpeakersDetails(html: string): Promise<ScrapedSpeaker[]> {
-    try {
-        // We need an API key. We'll use the one from the environment.
-        // In the existing geminiService.ts, it uses `process.env.API_KEY`.
-        // We'll try to retrieve it similarly.
-        // We'll try to retrieve it similarly.
-        const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || (process.env as any).API_KEY;
-
-        if (!apiKey) {
-            throw new Error("Gemini API Key is missing");
-        }
-
-        const ai = new GoogleGenAI({ apiKey });
-
-        // Truncate HTML if it's too massive to avoid token limits, though 1.5 Flash has a large context.
-        // Let's safe-guard slightly, maybe 100k chars is enough for most bodies.
-        const truncatedHtml = html.length > 200000 ? html.substring(0, 200000) : html;
-
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: EXTRACT_SPEAKERS_PROMPT.replace('{{html_content}}', truncatedHtml),
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        speakers: {
-                            type: Type.ARRAY,
-                            items: {
-                                type: Type.OBJECT,
-                                properties: {
-                                    name: { type: Type.STRING },
-                                    company: { type: Type.STRING },
-                                    role: { type: Type.STRING }
-                                },
-                                required: ["name", "company"]
-                            }
-                        }
-                    },
-                    required: ["speakers"]
-                }
-            }
-        });
-
-        const resultText = typeof (response as any).text === 'function' ? (response as any).text() : (response as any).text;
-        const result = JSON.parse(resultText || '{}');
-
-        return result.speakers || [];
-
-    } catch (error: any) {
-        console.error("Gemini extraction failed:", error);
-        return [];
     }
 }
 

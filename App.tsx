@@ -43,8 +43,12 @@ import { twMerge } from 'tailwind-merge';
 import { ProspectRow, MappingConfig, HistoryEntry, ScrapedSpeaker } from './types';
 import { findEmail, verifyEmail } from './services/getProspect';
 import { suggestMappings, findLinkedInUrl } from './services/geminiService';
-import { scrapeEvent } from './services/scraperService';
-import { Globe, Users } from 'lucide-react';
+import { scrapeEvent, extractSpeakersFromText } from './services/scraperService';
+import { Globe, Users, FileText } from 'lucide-react';
+import * as pdfjsLib from 'pdfjs-dist';
+
+// Set up PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
 // Initialize Supabase client with safety fallbacks to prevent "supabaseUrl is required" error
 const SUPABASE_URL = (import.meta as any).env?.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://jftnwoojuofxzufmrogx.supabase.co';
@@ -193,6 +197,7 @@ const App: React.FC = () => {
     const [scrapedSpeakers, setScrapedSpeakers] = useState<ScrapedSpeaker[]>([]);
     const [lastScrapedResults, setLastScrapedResults] = useState<ScrapedSpeaker[]>([]);
     const [isScraping, setIsScraping] = useState(false);
+    const [isPdfProcessing, setIsPdfProcessing] = useState(false);
 
     // Derived states for current active feature
     const rows = appMode === 'enrich' ? enrichRows : (appMode === 'verify' ? verifyRows : (appMode === 'linkedin' ? linkedinRows : []));
@@ -1750,6 +1755,50 @@ const App: React.FC = () => {
         setEventUrl('');
     };
 
+    const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const uploadedFile = e.target.files?.[0];
+        if (!uploadedFile) return;
+
+        setIsPdfProcessing(true);
+        setError(null);
+        setScrapedSpeakers([]);
+
+        try {
+            const arrayBuffer = await uploadedFile.arrayBuffer();
+            const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+            const pdf = await loadingTask.promise;
+
+            let fullText = "";
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                const pageText = textContent.items
+                    .map((item: any) => item.str)
+                    .join(" ");
+                fullText += pageText + "\n";
+            }
+
+            if (!fullText.trim()) {
+                throw new Error("No text content found in the PDF.");
+            }
+
+            const speakers = await extractSpeakersFromText(fullText);
+            if (speakers && speakers.length > 0) {
+                setScrapedSpeakers(speakers);
+                setLastScrapedResults(speakers);
+            } else {
+                setError("No speakers or participants identified in the PDF. Try another document.");
+            }
+        } catch (err: any) {
+            console.error("PDF processing failed:", err);
+            setError(err.message || "Failed to process PDF.");
+        } finally {
+            setIsPdfProcessing(false);
+            // Reset input value to allow uploading same file again
+            e.target.value = '';
+        }
+    };
+
 
     if (isInitialAuthCheck) {
         return (
@@ -2035,36 +2084,61 @@ const App: React.FC = () => {
                         <div className="w-full max-w-4xl mx-auto space-y-8">
                             {/* URL Input Section */}
                             <div className={`${themeClasses.card} p-8 rounded-[2rem] border border-violet-800/10 shadow-xl text-center relative overflow-hidden`}>
-                                {isScraping && (
+                                {(isScraping || isPdfProcessing) && (
                                     <div className={`absolute inset-0 z-20 flex flex-col items-center justify-center backdrop-blur-sm ${theme === 'dark' ? 'bg-black/60' : 'bg-white/60'} animate-fade-in`}>
                                         <Loader2 className="w-10 h-10 animate-spin text-emerald-500 mb-3" />
-                                        <h4 className={`text-lg font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Scanning Page...</h4>
+                                        <h4 className={`text-lg font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{isScraping ? 'Scanning Page...' : 'Analyzing PDF...'}</h4>
                                         <p className={`text-sm ${theme === 'dark' ? 'text-violet-300' : 'text-slate-600'} mt-1`}>This may take a few moments.</p>
                                     </div>
                                 )}
                                 <div className="flex flex-col items-center mb-6">
                                     <div className="bg-emerald-600/10 p-3 rounded-2xl mb-3"><Globe className="w-8 h-8 text-emerald-600" /></div>
-                                    <h3 className={`text-2xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Event Web Scraper</h3>
-                                    <p className={`${theme === 'dark' ? 'text-violet-300/60' : 'text-slate-500'} mt-2 max-w-md`}>Enter an event page URL to automatically extract speakers and attendees for enrichment.</p>
+                                    <h3 className={`text-2xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Event & Brochure Scraper</h3>
+                                    <p className={`${theme === 'dark' ? 'text-violet-300/60' : 'text-slate-500'} mt-2 max-w-md`}>Enter an event URL or upload a brochure/PDF to extract leads.</p>
                                 </div>
 
-                                <div className="relative max-w-2xl mx-auto">
-                                    <input
-                                        type="url"
-                                        placeholder="https://example.com/event-page"
-                                        className={`w-full pl-6 pr-32 py-4 ${themeClasses.input} rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 transition-all text-sm shadow-inner`}
-                                        value={eventUrl}
-                                        onChange={(e) => setEventUrl(e.target.value)}
-                                        onKeyDown={(e) => e.key === 'Enter' && handleScrape()}
-                                        disabled={isScraping}
-                                    />
-                                    <button
-                                        onClick={handleScrape}
-                                        disabled={isScraping || !eventUrl}
-                                        className="absolute right-2 top-2 bottom-2 px-6 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold rounded-xl transition-all shadow-lg flex items-center gap-2 text-xs"
-                                    >
-                                        {isScraping ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Scrape Page'}
-                                    </button>
+                                <div className="relative max-w-2xl mx-auto space-y-4">
+                                    <div className="relative">
+                                        <input
+                                            type="url"
+                                            placeholder="https://example.com/event-page"
+                                            className={`w-full pl-6 pr-32 py-4 ${themeClasses.input} rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 transition-all text-sm shadow-inner`}
+                                            value={eventUrl}
+                                            onChange={(e) => setEventUrl(e.target.value)}
+                                            onKeyDown={(e) => e.key === 'Enter' && handleScrape()}
+                                            disabled={isScraping || isPdfProcessing}
+                                        />
+                                        <button
+                                            onClick={handleScrape}
+                                            disabled={isScraping || isPdfProcessing || !eventUrl}
+                                            className="absolute right-2 top-2 bottom-2 px-6 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold rounded-xl transition-all shadow-lg flex items-center gap-2 text-xs"
+                                        >
+                                            {isScraping ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Scrape Page'}
+                                        </button>
+                                    </div>
+
+                                    <div className="flex items-center gap-4 py-2">
+                                        <div className="flex-1 h-px bg-slate-300/30"></div>
+                                        <span className="text-[10px] font-bold uppercase tracking-widest opacity-40">OR</span>
+                                        <div className="flex-1 h-px bg-slate-300/30"></div>
+                                    </div>
+
+                                    <div className="flex justify-center">
+                                        <label className={`flex items-center gap-3 px-8 py-4 ${theme === 'dark' ? 'bg-violet-600/10 border-violet-800/20 hover:bg-violet-600/20' : 'bg-emerald-50 border-emerald-100 hover:bg-emerald-100'} border-2 border-dashed rounded-2xl cursor-pointer transition-all group`}>
+                                            <FileText className={`w-6 h-6 ${theme === 'dark' ? 'text-violet-400' : 'text-emerald-600'} group-hover:scale-110 transition-transform`} />
+                                            <div className="text-left">
+                                                <p className={`text-sm font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Upload Brochure/PDF</p>
+                                                <p className="text-[10px] opacity-60">Participants, Speakers, etc.</p>
+                                            </div>
+                                            <input
+                                                type="file"
+                                                className="hidden"
+                                                accept=".pdf"
+                                                onChange={handlePdfUpload}
+                                                disabled={isScraping || isPdfProcessing}
+                                            />
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
 
