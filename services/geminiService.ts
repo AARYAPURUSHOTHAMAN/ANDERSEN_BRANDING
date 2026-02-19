@@ -12,9 +12,10 @@ If you are unsure, pick the most likely ones.
 
 export async function suggestMappings(headers: string[]): Promise<{ nameHeader: string; companyHeader: string }> {
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || (process.env as any).API_KEY;
+    const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-1.5-flash",
       contents: GET_PROSPECT_PROMPT.replace('{{headers}}', headers.join(', ')),
       config: {
         responseMimeType: "application/json",
