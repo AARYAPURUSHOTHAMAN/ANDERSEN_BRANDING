@@ -1798,7 +1798,7 @@ const App: React.FC = () => {
                         <div className="mb-4">
                             <img src="/logo.png" alt="Andersen Logo" className="h-12 w-auto" />
                         </div>
-                        <h1 className={`text-3xl font-helvetica font-bold text-black`}>10xContact retrieval</h1>
+                        <h1 className={`text-3xl font-helvetica font-bold text-black`}>10xContact Retrieval</h1>
                         <p className={`text-gray-500 text-xs mt-1 italic tracking-wide`}>{authMode === 'login' ? 'Sign in to your workspace' : 'Create your free account'}</p>
                     </div>
                     <form onSubmit={handleAuth} className="space-y-4">
