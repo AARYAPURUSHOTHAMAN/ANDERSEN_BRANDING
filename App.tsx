@@ -124,6 +124,106 @@ const BoxesCore = ({ className, ...rest }: { className?: string }) => {
 
 const BackgroundBoxes = React.memo(BoxesCore);
 
+/**
+ * Memoized Individual Table Row to prevent flickering and unnecessary re-renders
+ */
+const MemoizedRow = React.memo(({
+    row,
+    appMode,
+    mapping,
+    themeClasses,
+    copyToClipboard
+}: {
+    row: ProspectRow;
+    appMode: string;
+    mapping: MappingConfig | null | undefined;
+    themeClasses: any;
+    copyToClipboard: (text: string) => void;
+}) => {
+    return (
+        <tr className={`group ${themeClasses.tableRow} transition-all h-[72px]`}>
+            {(appMode === 'enrich' || appMode === 'linkedin') && (
+                <td className={`px-6 py-3 first:rounded-l-2xl ${themeClasses.tableCell} transition-colors w-[25%]`}>
+                    <div className="flex flex-col">
+                        <span className={`text-sm font-bold text-slate-900 flex items-center gap-2 truncate`}>
+                            <User className="w-3.5 h-3.5 text-andersen-red shrink-0" />
+                            {row.name || row.originalData[mapping?.nameHeader || ''] || '—'}
+                        </span>
+                        <span className={`text-[11px] font-medium text-slate-500 flex items-center gap-2 mt-1 truncate`}>
+                            <Building2 className="w-3 h-3 shrink-0" />
+                            {row.company || row.originalData[mapping?.companyHeader || ''] || '—'}
+                        </span>
+                    </div>
+                </td>
+            )}
+            {appMode !== 'linkedin' && (
+                <td className={`px-6 py-3 ${themeClasses.tableCell} transition-colors w-[45%]`}>
+                    {row.email ? (
+                        <div className="flex items-center gap-3">
+                            <span className={`text-sm font-mono text-slate-700 bg-black/5 px-3 py-1.5 rounded-lg border border-black/10 break-all line-clamp-1`}>
+                                {row.email}
+                            </span>
+                            <button onClick={() => copyToClipboard(row.email!)} className={`p-1.5 hover:bg-andersen-red/10 rounded-md transition-all text-slate-500 hover:text-andersen-red`}>
+                                <Copy className="w-4 h-4" />
+                            </button>
+                        </div>
+                    ) : (
+                        <span className={`text-[11px] font-bold ${themeClasses.statusPending} uppercase tracking-widest italic`}>
+                            nil
+                        </span>
+                    )}
+                </td>
+            )}
+            {appMode === 'linkedin' && (
+                <td className={`px-6 py-3 ${themeClasses.tableCell} transition-colors w-[45%]`}>
+                    {row.linkedinUrl ? (
+                        <div className="flex items-center gap-3">
+                            <a href={row.linkedinUrl} target="_blank" rel="noreferrer" className={`text-sm font-mono text-blue-500 hover:underline flex items-center gap-1.5 break-all line-clamp-1`}>
+                                <Linkedin className="w-3.5 h-3.5" /> Profile
+                            </a>
+                            <button onClick={() => copyToClipboard(row.linkedinUrl!)} className={`p-1.5 hover:bg-blue-50 text-slate-500 rounded-md transition-all`}>
+                                <Copy className="w-4 h-4" />
+                            </button>
+                        </div>
+                    ) : (
+                        <span className={`text-[11px] font-bold ${themeClasses.statusPending} uppercase tracking-widest italic`}>
+                            nil
+                        </span>
+                    )}
+                </td>
+            )}
+            <td className={`px-6 py-3 last:rounded-r-2xl ${themeClasses.tableCell} transition-colors text-center w-[30%]`}>
+                <div className="flex flex-col items-center gap-1">
+                    <div className={`inline-flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em] px-4 py-1.5 rounded-full border shadow-sm transition-all duration-300 min-w-[120px] ${row.status === 'processing' || row.status === 'searching' ? 'text-andersen-red bg-andersen-red/10 border-andersen-red/20 animate-pulse' : row.status === 'completed' || row.status === 'deliverable' || row.status === 'found' ? 'text-green-700 bg-green-100 border-green-200' : row.status === 'not_found' || row.status === 'risky' ? 'text-amber-700 bg-amber-100 border-amber-200' : row.status === 'failed' || row.status === 'undeliverable' ? 'text-rose-700 bg-rose-100 border-rose-200' : row.status === 'unknown' ? 'text-slate-600 bg-slate-100 border-slate-200' : themeClasses.statusPending}`}>
+                        {(row.status === 'processing' || row.status === 'searching') && <Loader2 className="w-3 h-3 animate-spin" />}
+                        {row.status === 'deliverable' ? 'VALID' : (row.status === 'undeliverable' ? 'INVALID' : row.status)}
+                    </div>
+                    {row.metadata?.cached && (
+                        <div className="flex flex-col items-center gap-1">
+                            <div className={`inline-flex items-center justify-center gap-1 text-[7px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border bg-andersen-red/5 text-andersen-red border-andersen-red/20`}>
+                                Already Processed
+                            </div>
+                            {(row.synced || row.metadata?.synced) && (
+                                <div className={`inline-flex items-center justify-center gap-1 text-[7px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border transition-all bg-blue-50 text-blue-600 border-blue-200`}>
+                                    Synced
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </td>
+        </tr>
+    );
+}, (prevProps, nextProps) => {
+    return (
+        prevProps.row.status === nextProps.row.status &&
+        prevProps.row.email === nextProps.row.email &&
+        prevProps.row.linkedinUrl === nextProps.row.linkedinUrl &&
+        prevProps.appMode === nextProps.appMode &&
+        prevProps.row.metadata?.cached === nextProps.row.metadata?.cached
+    );
+});
+
 const App: React.FC = () => {
     // Theme State
     const theme = 'light';
@@ -750,8 +850,6 @@ const App: React.FC = () => {
 
             currentRowsState = currentRowsState.map((r, idx) => idx === i ? { ...r, ...resultRowUpdate } : r);
             setRows([...currentRowsState]);
-
-            await new Promise(res => setTimeout(res, 300));
         }
 
         if (appMode === 'enrich') {
@@ -2443,45 +2541,22 @@ const App: React.FC = () => {
                                     <table className="w-full text-left border-separate border-spacing-y-2">
                                         <thead className="sticky top-0 z-20">
                                             <tr>
-                                                {(appMode === 'enrich' || appMode === 'linkedin') && <th className={`px-6 py-3 text-[10px] font-bold ${themeClasses.label} uppercase tracking-[0.2em] ${themeClasses.tableHeader} first:rounded-l-2xl sticky top-0 z-20`}>Contact</th>}
-                                                {appMode !== 'linkedin' && <th className={`px-6 py-3 text-[10px] font-bold ${themeClasses.label} uppercase tracking-[0.2em] ${themeClasses.tableHeader} sticky top-0 z-20`}>Email</th>}
-                                                {appMode === 'linkedin' && <th className={`px-6 py-3 text-[10px] font-bold ${themeClasses.label} uppercase tracking-[0.2em] ${themeClasses.tableHeader} sticky top-0 z-20`}>LinkedIn Profile</th>}
-                                                <th className={`px-6 py-3 text-[10px] font-bold ${themeClasses.label} uppercase tracking-[0.2em] ${themeClasses.tableHeader} last:rounded-r-2xl sticky top-0 z-20 text-center`}>Status</th>
+                                                {(appMode === 'enrich' || appMode === 'linkedin') && <th className={`px-6 py-3 text-[10px] font-bold ${themeClasses.label} uppercase tracking-[0.2em] ${themeClasses.tableHeader} first:rounded-l-2xl sticky top-0 z-20 w-[25%]`}>Contact</th>}
+                                                {appMode !== 'linkedin' && <th className={`px-6 py-3 text-[10px] font-bold ${themeClasses.label} uppercase tracking-[0.2em] ${themeClasses.tableHeader} sticky top-0 z-20 w-[45%]`}>Email</th>}
+                                                {appMode === 'linkedin' && <th className={`px-6 py-3 text-[10px] font-bold ${themeClasses.label} uppercase tracking-[0.2em] ${themeClasses.tableHeader} sticky top-0 z-20 w-[45%]`}>LinkedIn Profile</th>}
+                                                <th className={`px-6 py-3 text-[10px] font-bold ${themeClasses.label} uppercase tracking-[0.2em] ${themeClasses.tableHeader} last:rounded-r-2xl sticky top-0 z-20 text-center w-[30%]`}>Status</th>
                                             </tr>
                                         </thead>
                                         <tbody className="px-4">
                                             {rows.map((row) => (
-                                                <tr key={row.id} className={`group ${themeClasses.tableRow} transition-all`}>
-                                                    {(appMode === 'enrich' || appMode === 'linkedin') && <td className={`px-6 py-3 first:rounded-l-2xl ${themeClasses.tableCell} transition-colors`}><div className="flex flex-col"><span className={`text-sm font-bold text-slate-900 flex items-center gap-2`}><User className="w-3.5 h-3.5 text-andersen-red" />{row.name || row.originalData[mapping?.nameHeader || ''] || '—'}</span><span className={`text-[11px] font-medium text-slate-500 flex items-center gap-2 mt-1`}><Building2 className="w-3 h-3" />{row.company || row.originalData[mapping?.companyHeader || ''] || '—'}</span></div></td>}
-                                                    {appMode !== 'linkedin' && (
-                                                        <td className={`px-6 py-3 ${themeClasses.tableCell} transition-colors`}>{row.email ? <div className="flex items-center gap-3"><span className={`text-sm font-mono text-slate-700 bg-black/5 px-3 py-1.5 rounded-lg border border-black/10 break-all`}>{row.email}</span><button onClick={() => copyToClipboard(row.email!)} className={`p-1.5 hover:bg-andersen-red/10 rounded-md transition-all text-slate-500 hover:text-andersen-red`}><Copy className="w-4 h-4" /></button></div> : <span className={`text-[11px] font-bold ${themeClasses.statusPending} uppercase tracking-widest italic`}>Ready</span>}</td>
-                                                    )}
-                                                    {appMode === 'linkedin' && (
-                                                        <td className={`px-6 py-3 ${themeClasses.tableCell} transition-colors`}>{row.linkedinUrl ? <div className="flex items-center gap-3"><a href={row.linkedinUrl} target="_blank" rel="noreferrer" className={`text-sm font-mono text-blue-500 hover:underline flex items-center gap-1.5 break-all`}><Linkedin className="w-3.5 h-3.5" /> Profile</a><button onClick={() => copyToClipboard(row.linkedinUrl!)} className={`p-1.5 hover:bg-blue-50 text-slate-500 rounded-md transition-all`}><Copy className="w-4 h-4" /></button></div> : <span className={`text-[11px] font-bold ${themeClasses.statusPending} uppercase tracking-widest italic`}>Ready</span>}</td>
-                                                    )}
-                                                    <td className={`px-6 py-3 last:rounded-r-2xl ${themeClasses.tableCell} transition-colors text-center`}>
-                                                        <div className="flex flex-col items-center gap-1">
-                                                            <div className={`inline-flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em] px-4 py-1.5 rounded-full border shadow-sm transition-all duration-300 min-w-[120px] ${row.status === 'processing' || row.status === 'searching' ? 'text-andersen-red bg-andersen-red/10 border-andersen-red/20 animate-pulse' : row.status === 'completed' || row.status === 'deliverable' || row.status === 'found' ? 'text-green-700 bg-green-100 border-green-200' : row.status === 'not_found' || row.status === 'risky' ? 'text-amber-700 bg-amber-100 border-amber-200' : row.status === 'failed' || row.status === 'undeliverable' ? 'text-rose-700 bg-rose-100 border-rose-200' : row.status === 'unknown' ? 'text-slate-600 bg-slate-100 border-slate-200' : themeClasses.statusPending}`}>{(row.status === 'processing' || row.status === 'searching') && <Loader2 className="w-3 h-3 animate-spin" />}{row.status === 'deliverable' ? 'VALID' : (row.status === 'undeliverable' ? 'INVALID' : row.status)}</div>
-                                                            {row.metadata?.cached && (
-                                                                <div className="flex flex-col items-center gap-1">
-                                                                    <div className={`inline-flex items-center justify-center gap-1 text-[7px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border bg-andersen-red/5 text-andersen-red border-andersen-red/20`}>
-                                                                        Already Processed
-                                                                    </div>
-                                                                    {(row.synced || row.metadata?.synced) && (
-                                                                        <div className={`inline-flex items-center justify-center gap-1 text-[7px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border transition-all bg-blue-50 text-blue-600 border-blue-200`}>
-                                                                            Synced
-                                                                        </div>
-                                                                    )}
-                                                                    {row.cachedAt && (
-                                                                        <span className={`text-[8px] font-medium opacity-60 text-slate-500`}>
-                                                                            Ran on {new Date(row.cachedAt).toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}  {row.cachedType ? `via ${row.cachedType === 'bulk' ? 'Bulk Upload' : 'Single Try'}` : ''}
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                </tr>
+                                                <MemoizedRow
+                                                    key={row.id}
+                                                    row={row}
+                                                    appMode={appMode}
+                                                    mapping={mapping}
+                                                    themeClasses={themeClasses}
+                                                    copyToClipboard={copyToClipboard}
+                                                />
                                             ))}
                                         </tbody>
                                     </table>
