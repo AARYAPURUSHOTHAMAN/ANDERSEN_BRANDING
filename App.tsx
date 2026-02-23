@@ -193,6 +193,8 @@ const App: React.FC = () => {
     const [scrapedSpeakers, setScrapedSpeakers] = useState<ScrapedSpeaker[]>([]);
     const [lastScrapedResults, setLastScrapedResults] = useState<ScrapedSpeaker[]>([]);
     const [isScraping, setIsScraping] = useState(false);
+    const [shouldAutoStart, setShouldAutoStart] = useState(false);
+    const [scraperTransferTarget, setScraperTransferTarget] = useState<'enrich' | 'verify' | 'linkedin'>('enrich');
 
     // Derived states for current active feature
     const rows = appMode === 'enrich' ? enrichRows : (appMode === 'verify' ? verifyRows : (appMode === 'linkedin' ? linkedinRows : []));
@@ -1684,8 +1686,17 @@ const App: React.FC = () => {
             setIsHistoryView(false);
             setShowExportModal(false);
             setShowSettingsMenu(false);
+            setShouldAutoStart(false); // Reset auto-start on manual switch
         }
     };
+
+    useEffect(() => {
+        if (shouldAutoStart && rows.length > 0 && mapping) {
+            console.log(`Auto-starting ${appMode} with ${rows.length} rows`);
+            setShouldAutoStart(false);
+            startProcessing();
+        }
+    }, [shouldAutoStart, rows, mapping, appMode]);
 
     const handleImportFromFinder = () => {
         if (resultsFromFinder.length === 0) return;
@@ -1700,9 +1711,11 @@ const App: React.FC = () => {
         setFile(new File([], "Enriched Emails List"));
     };
 
-    const handleImportFromScraper = (targetMode: 'enrich' | 'linkedin') => {
-        if (lastScrapedResults.length === 0) return;
-        const newRows: ProspectRow[] = lastScrapedResults.map((s, idx) => ({
+    const handleImportFromScraper = (targetMode: 'enrich' | 'linkedin' | 'verify', data?: ScrapedSpeaker[]) => {
+        const sourceData = data || lastScrapedResults;
+        if (sourceData.length === 0) return;
+
+        const newRows: ProspectRow[] = sourceData.map((s, idx) => ({
             id: `scraped-import-${idx}`,
             name: s.name,
             company: s.company,
@@ -1712,9 +1725,19 @@ const App: React.FC = () => {
 
         setAppMode(targetMode);
         setRows(newRows);
-        setHeaders(['Scraped Name', 'Scraped Company', 'Role']);
-        setMapping({ nameHeader: 'Scraped Name', companyHeader: 'Scraped Company' });
+
+        if (targetMode === 'verify') {
+            setHeaders(['Scraped Name', 'Scraped Company', 'Role']);
+            // For verification, we might want to map the "Role" or "Name" as a placeholder if Email isn't there, 
+            // but usually user will have to pick a column. 
+            setMapping({ nameHeader: 'Scraped Name', companyHeader: 'Scraped Company', emailHeader: '' });
+        } else {
+            setHeaders(['Scraped Name', 'Scraped Company', 'Role']);
+            setMapping({ nameHeader: 'Scraped Name', companyHeader: 'Scraped Company' });
+        }
+
         setFile(new File([], "Imported Scraper Leads"));
+        setShouldAutoStart(true);
     };
 
     const handleScrape = async () => {
@@ -1741,10 +1764,10 @@ const App: React.FC = () => {
         }
     };
 
-    const handleProcessLeads = () => {
+    const handleProcessLeads = (mode: 'enrich' | 'linkedin' | 'verify') => {
         if (scrapedSpeakers.length === 0) return;
         setLastScrapedResults(scrapedSpeakers);
-        handleImportFromScraper('enrich');
+        handleImportFromScraper(mode, scrapedSpeakers); // Pass speakers directly to avoid stale state
         setScrapedSpeakers([]);
         setEventUrl('');
     };
@@ -1834,10 +1857,10 @@ const App: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-4">
                     <div className={`flex bg-black/5 border-black/10 p-1 rounded-xl border`}>
-                        <button onClick={() => handleTabSwitch('enrich')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${appMode === 'enrich' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-black'}`}>Email Finder</button>
-                        <button onClick={() => handleTabSwitch('verify')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${appMode === 'verify' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-black'}`}>Email Verifier</button>
-                        <button onClick={() => handleTabSwitch('linkedin')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${appMode === 'linkedin' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-black'}`}>LinkedIn Finder</button>
-                        <button onClick={() => handleTabSwitch('event-scraper')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${appMode === 'event-scraper' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-black'}`}>Event Scraper</button>
+                        <button onClick={() => handleTabSwitch('enrich')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${appMode === 'enrich' ? 'bg-andersen-red text-white shadow-lg shadow-andersen-red/20' : 'bg-white text-black hover:bg-gray-100'}`}>Email Finder</button>
+                        <button onClick={() => handleTabSwitch('verify')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${appMode === 'verify' ? 'bg-andersen-red text-white shadow-lg shadow-andersen-red/20' : 'bg-white text-black hover:bg-gray-100'}`}>Email Verifier</button>
+                        <button onClick={() => handleTabSwitch('linkedin')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${appMode === 'linkedin' ? 'bg-andersen-red text-white shadow-lg shadow-andersen-red/20' : 'bg-white text-black hover:bg-gray-100'}`}>LinkedIn Finder</button>
+                        <button onClick={() => handleTabSwitch('event-scraper')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${appMode === 'event-scraper' ? 'bg-andersen-red text-white shadow-lg shadow-andersen-red/20' : 'bg-white text-black hover:bg-gray-100'}`}>Event Scraper</button>
                     </div>
                     <div className="flex items-center gap-2">
                         <button
@@ -2066,12 +2089,34 @@ const App: React.FC = () => {
                                                 <span className="text-[10px] font-bold text-andersen-red uppercase tracking-widest">{scrapedSpeakers.length} Found</span>
                                             </div>
                                         </div>
-                                        <button
-                                            onClick={handleProcessLeads}
-                                            className="px-6 py-2.5 bg-andersen-red hover:bg-red-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-andersen-red/30 flex items-center gap-2 text-xs"
-                                        >
-                                            Process Leads <ArrowRight className="w-4 h-4" />
-                                        </button>
+                                        <div className="flex items-center gap-4">
+                                            <div className="flex bg-black/5 border-black/10 p-1 rounded-xl border">
+                                                <button
+                                                    onClick={() => setScraperTransferTarget('enrich')}
+                                                    className={`px-4 py-2 rounded-lg text-[10px] font-bold transition-all whitespace-nowrap uppercase tracking-wider ${scraperTransferTarget === 'enrich' ? 'bg-andersen-red text-white shadow-lg shadow-andersen-red/20' : 'bg-white text-black hover:bg-gray-100'}`}
+                                                >
+                                                    Find Emails
+                                                </button>
+                                                <button
+                                                    onClick={() => setScraperTransferTarget('linkedin')}
+                                                    className={`px-4 py-2 rounded-lg text-[10px] font-bold transition-all whitespace-nowrap uppercase tracking-wider ${scraperTransferTarget === 'linkedin' ? 'bg-andersen-red text-white shadow-lg shadow-andersen-red/20' : 'bg-white text-black hover:bg-gray-100'}`}
+                                                >
+                                                    Find Profiles
+                                                </button>
+                                                <button
+                                                    onClick={() => setScraperTransferTarget('verify')}
+                                                    className={`px-4 py-2 rounded-lg text-[10px] font-bold transition-all whitespace-nowrap uppercase tracking-wider ${scraperTransferTarget === 'verify' ? 'bg-andersen-red text-white shadow-lg shadow-andersen-red/20' : 'bg-white text-black hover:bg-gray-100'}`}
+                                                >
+                                                    Verify Only
+                                                </button>
+                                            </div>
+                                            <button
+                                                onClick={() => handleProcessLeads(scraperTransferTarget)}
+                                                className="px-6 py-2 bg-andersen-red hover:bg-red-700 text-white font-bold rounded-xl transition-all shadow-lg flex items-center gap-2 text-[10px] uppercase tracking-widest"
+                                            >
+                                                Process Leads <ArrowRight className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
                                     </div>
                                     <div className="max-h-[500px] overflow-y-auto custom-scrollbar p-0">
                                         <table className="w-full text-left border-collapse">
@@ -2190,8 +2235,8 @@ const App: React.FC = () => {
                             </div>
                             <div className="lg:col-span-3 flex flex-col items-center">
                                 <div className={`mb-1 p-1.5 rounded-2xl border bg-black/5 border-black/10 flex gap-1 shadow-inner`}>
-                                    <button onClick={() => setInputMode('bulk')} className={`px-8 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${inputMode === 'bulk' ? 'bg-white text-black shadow-sm' : 'text-slate-500 hover:text-black'}`}><Layers className="w-4 h-4" /> Bulk Upload</button>
-                                    <button onClick={() => setInputMode('single')} className={`px-8 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${inputMode === 'single' ? 'bg-white text-black shadow-sm' : 'text-slate-500 hover:text-black'}`}><MousePointer2 className="w-4 h-4" /> Single Try</button>
+                                    <button onClick={() => setInputMode('bulk')} className={`px-8 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${inputMode === 'bulk' ? 'bg-andersen-red text-white shadow-lg shadow-andersen-red/20' : 'bg-white text-black hover:bg-gray-100'}`}><Layers className="w-4 h-4" /> Bulk Upload</button>
+                                    <button onClick={() => setInputMode('single')} className={`px-8 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${inputMode === 'single' ? 'bg-andersen-red text-white shadow-lg shadow-andersen-red/20' : 'bg-white text-black hover:bg-gray-100'}`}><MousePointer2 className="w-4 h-4" /> Single Try</button>
                                 </div>
                                 <AnimatePresence mode="wait">
                                     {inputMode === 'bulk' ? (
@@ -2201,7 +2246,7 @@ const App: React.FC = () => {
                                             <div className="flex flex-col sm:flex-row gap-4 items-center">
                                                 <label className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold py-3 px-8 rounded-2xl cursor-pointer transition-all shadow-sm">Select Spreadsheet<input type="file" className="hidden" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} /></label>
                                                 {appMode === 'verify' && resultsFromFinder.length > 0 && <button onClick={(e) => { e.stopPropagation(); handleImportFromFinder(); }} className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold py-3 px-6 rounded-2xl transition-all shadow-sm flex items-center gap-2"><ArrowLeftRight className="w-4 h-4" /> Use Found Emails</button>}
-                                                {lastScrapedResults.length > 0 && (appMode === 'linkedin' || appMode === 'enrich') && <button onClick={(e) => { e.stopPropagation(); handleImportFromScraper(appMode === 'linkedin' ? 'linkedin' : 'enrich'); }} className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold py-3 px-6 rounded-2xl transition-all shadow-sm flex items-center gap-2"><ArrowLeftRight className="w-4 h-4" /> Use Scraped Results</button>}
+                                                {lastScrapedResults.length > 0 && (appMode === 'linkedin' || appMode === 'enrich' || appMode === 'verify') && <button onClick={(e) => { e.stopPropagation(); handleImportFromScraper(appMode); }} className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold py-3 px-6 rounded-2xl transition-all shadow-sm flex items-center gap-2"><ArrowLeftRight className="w-4 h-4" /> Use Scraped Results</button>}
                                             </div>
                                         </motion.div>
                                     ) : (
