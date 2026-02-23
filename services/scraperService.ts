@@ -64,7 +64,7 @@ export async function extractSpeakersDetails(html: string): Promise<ScrapedSpeak
         // In the existing geminiService.ts, it uses `process.env.API_KEY`.
         // We'll try to retrieve it similarly.
         // We'll try to retrieve it similarly.
-        const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || (process.env as any).API_KEY;
+        const apiKey = (import.meta as any).env?.GEMINI_API_KEY || (process.env as any).API_KEY;
 
         if (!apiKey) {
             throw new Error("Gemini API Key is missing");

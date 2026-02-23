@@ -71,7 +71,7 @@ const BoxesCore = ({ className, ...rest }: { className?: string }) => {
     const rows = new Array(30).fill(1);
     const cols = new Array(30).fill(1);
     const colors = [
-        "#7dd3fc", "#f9a8d4", "#86efac", "#fde047", "#fca5a5", "#d8b4fe", "#93c5fd", "#a5b4fc", "#c4b5fd",
+        "#AB0E1E", "#000000", "#333333", "#4B5563", "#9CA3AF", "#D1D5DB", "#E5E7EB",
     ];
     // Corrected: Replaced System.random() with Math.random()
     const getRandomColor = () => colors[Math.floor(Math.random() * colors.length)];
@@ -88,7 +88,7 @@ const BoxesCore = ({ className, ...rest }: { className?: string }) => {
             {...rest}
         >
             {rows.map((_, i) => (
-                <div key={`row` + i} className="w-24 h-16 border-l border-slate-700/30 relative">
+                <div key={`row` + i} className="w-24 h-16 border-l border-gray-500/20 relative">
                     {cols.map((_, j) => (
                         <motion.div
                             key={`col` + j}
@@ -126,7 +126,7 @@ const BackgroundBoxes = React.memo(BoxesCore);
 
 const App: React.FC = () => {
     // Theme State
-    const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+    const theme = 'light';
 
     // Supabase Auth Session
     const [session, setSession] = useState<any>(null);
@@ -474,18 +474,18 @@ const App: React.FC = () => {
             valid: '#10B981',
             completed: '#10B981',
             success: '#10B981',
-            found: '#3B82F6',
-            undeliverable: '#EF4444',
-            invalid: '#EF4444',
-            failed: '#EF4444',
+            found: '#000000',
+            undeliverable: '#AB0E1E',
+            invalid: '#AB0E1E',
+            failed: '#AB0E1E',
             risky: '#F59E0B',
             warning: '#F59E0B',
-            pending: '#8B5CF6',
-            processing: '#8B5CF6',
-            searching: '#8B5CF6',
+            pending: '#6B7280',
+            processing: '#000000',
+            searching: '#000000',
             unknown: '#64748B'
         };
-        return colorMap[s] || '#8B5CF6';
+        return colorMap[s] || '#000000';
     };
 
     const stats = useMemo(() => {
@@ -583,7 +583,6 @@ const App: React.FC = () => {
         await supabase.auth.signOut();
         setSession(null);
         setShowLogoutConfirm(false);
-        setFile(null);
         setRows([]);
         setHeaders([]);
         setMapping(null);
@@ -1664,18 +1663,18 @@ const App: React.FC = () => {
     const copyToClipboard = (text: string) => navigator.clipboard.writeText(text);
 
     const themeClasses = {
-        bg: theme === 'dark' ? 'bg-[#0f0720]' : 'bg-[#f8fafc]',
-        text: theme === 'dark' ? 'text-violet-100' : 'text-slate-900',
-        glass: theme === 'dark' ? 'glass-dark' : 'bg-white/80 backdrop-blur-xl border border-white/20',
-        header: theme === 'dark' ? 'glass-dark border-violet-800/30' : 'bg-white/90 border-slate-200 shadow-sm backdrop-blur-md',
-        card: theme === 'dark' ? 'glass-dark' : 'bg-white border border-slate-100 shadow-lg',
-        input: theme === 'dark' ? 'bg-violet-950/40 border-violet-800/50 text-white' : 'bg-slate-50 border-slate-200 text-slate-900',
-        label: theme === 'dark' ? 'text-violet-400' : 'text-slate-600',
-        sidebarText: theme === 'dark' ? 'text-violet-200' : 'text-slate-700',
-        tableHeader: theme === 'dark' ? 'bg-[#150b2e]' : 'bg-slate-50 border-b border-slate-100',
-        tableRow: theme === 'dark' ? 'hover:bg-violet-900/40' : 'hover:bg-blue-50/50',
-        tableCell: theme === 'dark' ? 'bg-violet-900/20' : 'bg-white',
-        statusPending: theme === 'dark' ? 'text-violet-400/30' : 'text-slate-400'
+        bg: 'bg-[#FFFFFF]',
+        text: 'text-black',
+        glass: 'bg-white/80 backdrop-blur-xl border border-black/5',
+        header: 'bg-white/95 border-b border-black/5 shadow-sm',
+        card: 'bg-white border border-black/5 shadow-md',
+        input: 'bg-gray-50 border-gray-200 text-black',
+        label: 'text-gray-600',
+        sidebarText: 'text-gray-700',
+        tableHeader: 'bg-gray-50 border-b border-gray-100',
+        tableRow: 'hover:bg-gray-50',
+        tableCell: 'bg-white',
+        statusPending: 'text-gray-400'
     };
 
     const handleTabSwitch = (mode: 'enrich' | 'verify' | 'linkedin' | 'event-scraper') => {
@@ -1753,16 +1752,15 @@ const App: React.FC = () => {
 
     if (isInitialAuthCheck) {
         return (
-            <div className={cn("min-h-screen w-full flex flex-col items-center justify-center p-4 transition-colors duration-500", theme === 'dark' ? "bg-slate-900" : "bg-[#f5f0e1]")}>
-                <BackgroundBoxes className="opacity-40" />
+            <div className={cn("min-h-screen w-full flex flex-col items-center justify-center p-4 transition-colors duration-500 bg-[#FFFFFF]")}>
                 <div className="relative z-30 flex flex-col items-center">
-                    <div className="bg-violet-600 p-4 rounded-3xl mb-6 shadow-2xl shadow-violet-600/40 animate-pulse">
-                        <Mail className="w-10 h-10 text-white" />
+                    <div className="mb-6 animate-pulse">
+                        <img src="/logo.png" alt="Andersen Logo" className="h-16 w-auto" />
                     </div>
-                    <h1 className={`text-3xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'} tracking-tight mb-2 uppercase tracking-[0.2em]`}>10xMailMatch</h1>
+                    <h1 className={`text-4xl font-helvetica font-bold text-black mb-2 uppercase`}>10xContact Retrieval</h1>
                     <div className="flex items-center gap-2 mt-4">
-                        <Loader2 className="w-4 h-4 animate-spin text-violet-600" />
-                        <span className={`text-xs font-bold uppercase tracking-widest ${theme === 'dark' ? 'text-violet-400/60' : 'text-slate-500'}`}>Synchronizing workspace...</span>
+                        <Loader2 className="w-4 h-4 animate-spin text-andersen-red" />
+                        <span className={`text-xs font-bold uppercase tracking-widest text-gray-400`}>Synchronizing workspace...</span>
                     </div>
                 </div>
             </div>
@@ -1771,45 +1769,40 @@ const App: React.FC = () => {
 
     if (!session) {
         return (
-            <div className={cn("min-h-screen relative w-full overflow-hidden flex items-center justify-center p-4 transition-colors duration-500", theme === 'dark' ? "bg-slate-900" : "bg-[#f5f0e1]")}>
-                <BackgroundBoxes className="opacity-60" />
-                <div className={cn("absolute inset-0 w-full h-full z-20 [mask-image:radial-gradient(transparent,white)] pointer-events-none", theme === 'dark' ? "bg-slate-900/30" : "bg-[#f5f0e1]/30")} />
-                <div className="absolute top-6 right-6 z-30">
-                    <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className={`p-2.5 rounded-xl border ${theme === 'dark' ? 'bg-violet-900/40 border-violet-800/50 text-violet-400 hover:text-violet-100' : 'bg-white border-amber-200 text-slate-600 hover:text-slate-900 shadow-sm'} transition-all`}>
-                        {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-                    </button>
-                </div>
+            <div className={cn("min-h-screen relative w-full overflow-hidden flex items-center justify-center p-4 transition-colors duration-500 bg-white")}>
                 <div className={cn(themeClasses.glass, "relative z-30 w-full max-w-md p-6 rounded-3xl animate-fade-in shadow-2xl mx-auto")}>
                     <div className="flex flex-col items-center mb-6">
-                        <div className="bg-violet-600 p-2.5 rounded-2xl mb-3 shadow-lg shadow-violet-600/20"><Mail className="w-6 h-6 text-white" /></div>
-                        <h1 className={`text-2xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'} tracking-tight`}>10xMailMatch</h1>
-                        <p className={`${theme === 'dark' ? 'text-violet-300/60' : 'text-slate-500'} text-xs mt-1`}>{authMode === 'login' ? 'Sign in to your workspace' : 'Create your free account'}</p>
+                        <div className="mb-4">
+                            <img src="/logo.png" alt="Andersen Logo" className="h-12 w-auto" />
+                        </div>
+                        <h1 className={`text-3xl font-helvetica font-bold text-black`}>10xContact retrieval</h1>
+                        <p className={`text-gray-500 text-xs mt-1 italic tracking-wide`}>{authMode === 'login' ? 'Sign in to your workspace' : 'Create your free account'}</p>
                     </div>
                     <form onSubmit={handleAuth} className="space-y-4">
                         {authMode === 'signup' && (
                             <div>
                                 <label className={`block text-[10px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1.5 ml-1`}>Full Name</label>
                                 <div className="relative">
-                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><User className={`h-4 w-4 ${theme === 'dark' ? 'text-violet-400/50' : 'text-slate-400'}`} /></div>
-                                    <input type="text" required className={`w-full ${themeClasses.input} rounded-xl pl-10 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-violet-500 outline-none transition-all`} value={authName} onChange={(e) => setAuthName(e.target.value)} />
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><User className={`h-4 w-4 text-gray-400`} /></div>
+                                    <input type="text" required className={`w-full ${themeClasses.input} rounded-xl pl-10 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-andersen-red outline-none transition-all`} value={authName} onChange={(e) => setAuthName(e.target.value)} />
                                 </div>
                             </div>
                         )}
                         <div>
                             <label className={`block text-[10px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1.5 ml-1`}>Email</label>
                             <div className="relative">
-                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Mail className={`h-4 w-4 ${theme === 'dark' ? 'text-violet-400/50' : 'text-slate-400'}`} /></div>
-                                <input type="email" required className={`w-full ${themeClasses.input} rounded-xl pl-10 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-violet-500 outline-none transition-all`} value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} />
+                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Mail className={`h-4 w-4 text-gray-400`} /></div>
+                                <input type="email" required className={`w-full ${themeClasses.input} rounded-xl pl-10 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-andersen-red outline-none transition-all`} value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} />
                             </div>
                         </div>
                         <div>
                             <label className={`block text-[10px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1.5 ml-1`}>Password</label>
                             <div className="relative">
-                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Lock className={`h-4 w-4 ${theme === 'dark' ? 'text-violet-400/50' : 'text-slate-400'}`} /></div>
-                                <input type="password" required className={`w-full ${themeClasses.input} rounded-xl pl-10 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-violet-500 outline-none transition-all`} value={authPass} onChange={(e) => setAuthPass(e.target.value)} />
+                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Lock className={`h-4 w-4 text-gray-400`} /></div>
+                                <input type="password" required className={`w-full ${themeClasses.input} rounded-xl pl-10 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-andersen-red outline-none transition-all`} value={authPass} onChange={(e) => setAuthPass(e.target.value)} />
                             </div>
                         </div>
-                        <button type="submit" disabled={isAuthLoading} className="w-full bg-violet-600 hover:bg-violet-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg hover:shadow-violet-600/30 flex items-center justify-center gap-2 text-sm">
+                        <button type="submit" disabled={isAuthLoading} className="w-full bg-andersen-red hover:bg-red-700 text-white font-bold py-3 rounded-xl transition-all shadow-lg hover:shadow-andersen-red/30 flex items-center justify-center gap-2 text-sm uppercase tracking-widest">
                             {isAuthLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : (authMode === 'login' ? 'Sign In' : 'Sign Up')} <ArrowRight className="w-4 h-4" />
                         </button>
                     </form>
@@ -1820,7 +1813,7 @@ const App: React.FC = () => {
                         </div>
                     )}
                     <div className="mt-6 text-center">
-                        <button onClick={() => { setAuthMode(authMode === 'login' ? 'signup' : 'login'); setError(null); }} className={`text-xs font-medium ${theme === 'dark' ? 'text-violet-400 hover:text-violet-200' : 'text-violet-600 hover:text-violet-800'} transition-colors`}>{authMode === 'login' ? "Don't have an account? Sign up" : "Already have an account? Sign in"}</button>
+                        <button onClick={() => { setAuthMode(authMode === 'login' ? 'signup' : 'login'); setError(null); }} className={`text-xs font-medium text-andersen-red hover:text-red-700 transition-colors`}>{authMode === 'login' ? "Don't have an account? Sign up" : "Already have an account? Sign in"}</button>
                     </div>
                 </div>
             </div>
@@ -1831,57 +1824,51 @@ const App: React.FC = () => {
         <div className={`min-h-screen flex flex-col ${themeClasses.text} relative transition-colors duration-500 overflow-hidden`}>
             {/* Background Decorative Layer */}
             <div className={`fixed inset-0 pointer-events-none z-0 overflow-hidden ${themeClasses.bg}`}>
-                <BackgroundBoxes className="opacity-40" />
-                <div className={cn("absolute inset-0 w-full h-full [mask-image:radial-gradient(transparent,white)]", theme === 'dark' ? "bg-slate-900/30" : "bg-[#f5f0e1]/30")} />
             </div>
 
             <header className={`${themeClasses.header} border-b fixed top-0 left-0 right-0 z-[1000] px-6 h-20 flex items-center justify-between transition-all duration-300 pointer-events-auto shadow-sm`}>
-                <div className="flex items-center gap-3">
-                    <div className="bg-violet-600 p-2 rounded-xl shadow-lg shadow-violet-600/20"><Mail className="w-5 h-5 text-white" /></div>
-                    <h1 className={`text-xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'} tracking-tight`}>10xMailMatch</h1>
+                <div className="flex items-center gap-4">
+                    <img src="/logo.png" alt="Andersen Logo" className="h-10 w-auto" />
+                    <div className="w-px h-8 bg-black/10 mx-1" />
+                    <h1 className={`text-2xl font-helvetica font-bold text-black`}>10xContact Retrieval</h1>
                 </div>
                 <div className="flex items-center gap-4">
-                    <div className={`flex ${theme === 'dark' ? 'bg-white/5 border-white/10' : 'bg-black/5 border-black/10'} p-1 rounded-xl border`}>
-                        <button onClick={() => handleTabSwitch('enrich')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${appMode === 'enrich' ? 'bg-violet-600 text-white shadow-lg' : theme === 'dark' ? 'text-violet-400 hover:text-violet-200' : 'text-slate-500 hover:text-slate-700'}`}>Email Finder</button>
-                        <button onClick={() => handleTabSwitch('verify')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${appMode === 'verify' ? 'bg-violet-600 text-white shadow-lg' : theme === 'dark' ? 'text-violet-400 hover:text-violet-200' : 'text-slate-500 hover:text-slate-700'}`}>Email Verifier</button>
-                        <button onClick={() => handleTabSwitch('linkedin')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${appMode === 'linkedin' ? 'bg-blue-600 text-white shadow-lg' : theme === 'dark' ? 'text-violet-400 hover:text-violet-200' : 'text-slate-500 hover:text-slate-700'}`}>LinkedIn Finder</button>
-                        <button onClick={() => handleTabSwitch('event-scraper')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${appMode === 'event-scraper' ? 'bg-emerald-600 text-white shadow-lg' : theme === 'dark' ? 'text-violet-400 hover:text-violet-200' : 'text-slate-500 hover:text-slate-700'}`}>Event Scraper</button>
+                    <div className={`flex bg-black/5 border-black/10 p-1 rounded-xl border`}>
+                        <button onClick={() => handleTabSwitch('enrich')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${appMode === 'enrich' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-black'}`}>Email Finder</button>
+                        <button onClick={() => handleTabSwitch('verify')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${appMode === 'verify' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-black'}`}>Email Verifier</button>
+                        <button onClick={() => handleTabSwitch('linkedin')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${appMode === 'linkedin' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-black'}`}>LinkedIn Finder</button>
+                        <button onClick={() => handleTabSwitch('event-scraper')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${appMode === 'event-scraper' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-black'}`}>Event Scraper</button>
                     </div>
                     <div className="flex items-center gap-2">
-                        <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className={`p-2 rounded-xl border ${theme === 'dark' ? 'bg-violet-900/40 border-violet-800/50 text-violet-400 hover:text-violet-100' : 'bg-white border-amber-200 text-slate-600 hover:text-slate-900'} transition-all`}>{theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}</button>
+                        <button
+                            onClick={() => setShowSettingsMenu(!showSettingsMenu)}
+                            className={`p-2 rounded-xl border bg-white border-gray-200 text-black hover:bg-gray-50 transition-all`}
+                        >
+                            <Settings className="w-5 h-5" />
+                        </button>
 
-                        {/* Settings Dropdown */}
-                        <div className="relative">
-                            <button
-                                onClick={() => setShowSettingsMenu(!showSettingsMenu)}
-                                className={`p-2 rounded-xl border ${theme === 'dark' ? 'bg-violet-900/40 border-violet-800/50 text-violet-400 hover:text-violet-100' : 'bg-white border-amber-200 text-slate-600 hover:text-slate-900'} transition-all`}
-                            >
-                                <Settings className="w-5 h-5" />
-                            </button>
+                        <AnimatePresence>
+                            {showSettingsMenu && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                    className={`absolute right-0 top-full mt-2 w-64 p-4 rounded-2xl border ${themeClasses.card} shadow-xl z-50 flex flex-col gap-3`}
+                                >
+                                    <div className="flex flex-col gap-1 pb-3 border-b border-gray-500/10">
+                                        <span className={`text-[10px] font-bold uppercase tracking-widest ${themeClasses.label}`}>Signed in as</span>
+                                        <p className={`text-sm font-medium truncate text-slate-900`}>{session?.user?.email}</p>
+                                    </div>
 
-                            <AnimatePresence>
-                                {showSettingsMenu && (
-                                    <motion.div
-                                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                                        className={`absolute right-0 top-full mt-2 w-64 p-4 rounded-2xl border ${themeClasses.card} shadow-xl z-50 flex flex-col gap-3`}
+                                    <button
+                                        onClick={() => { setShowSettingsMenu(false); setShowLogoutConfirm(true); }}
+                                        className={`flex items-center gap-2 px-4 py-2.5 bg-andersen-red/5 hover:bg-andersen-red/10 text-andersen-red rounded-xl text-sm font-bold transition-all w-full`}
                                     >
-                                        <div className="flex flex-col gap-1 pb-3 border-b border-gray-500/10">
-                                            <span className={`text-[10px] font-bold uppercase tracking-widest ${themeClasses.label}`}>Signed in as</span>
-                                            <p className={`text-sm font-medium truncate ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{session?.user?.email}</p>
-                                        </div>
-
-                                        <button
-                                            onClick={() => { setShowSettingsMenu(false); setShowLogoutConfirm(true); }}
-                                            className={`flex items-center gap-2 px-4 py-2.5 ${theme === 'dark' ? 'bg-rose-900/20 hover:bg-rose-900/40 text-rose-400' : 'bg-rose-50 hover:bg-rose-100 text-rose-600'} rounded-xl text-sm font-bold transition-all w-full`}
-                                        >
-                                            <LogOut className="w-4 h-4" /> Sign Out
-                                        </button>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </div>
+                                        <LogOut className="w-4 h-4" /> Sign Out
+                                    </button>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
                     </div>
                 </div>
             </header>
@@ -1889,13 +1876,13 @@ const App: React.FC = () => {
             <AnimatePresence>
                 {showLogoutConfirm && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                        <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className={`${themeClasses.card} max-w-sm w-full p-6 rounded-[2rem] border-violet-800/50 shadow-2xl text-center mx-auto`}>
-                            <div className="bg-rose-600/20 p-3 rounded-2xl w-fit mx-auto mb-4"><LogOut className="w-6 h-6 text-rose-500" /></div>
-                            <h3 className={`text-lg font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'} mb-1`}>Sign Out</h3>
-                            <p className={`${theme === 'dark' ? 'text-violet-300/70' : 'text-slate-500'} text-xs mb-6`}>Are you sure you want to sign out?</p>
+                        <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className={`${themeClasses.card} max-w-sm w-full p-6 rounded-[2rem] border-gray-200 shadow-2xl text-center mx-auto`}>
+                            <div className="bg-andersen-red/10 p-3 rounded-2xl w-fit mx-auto mb-4"><LogOut className="w-6 h-6 text-andersen-red" /></div>
+                            <h3 className={`text-lg font-bold text-slate-900 mb-1`}>Sign Out</h3>
+                            <p className={`text-slate-500 text-xs mb-6`}>Are you sure you want to sign out?</p>
                             <div className="flex flex-col gap-2.5">
-                                <button onClick={performLogout} className="w-full py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl transition-all text-sm">Yes, Sign Me Out</button>
-                                <button onClick={() => setShowLogoutConfirm(false)} className={`w-full py-2.5 ${theme === 'dark' ? 'bg-violet-900/40 hover:bg-violet-900/60 text-violet-300' : 'bg-slate-200 hover:bg-slate-300 text-slate-700'} font-bold rounded-xl transition-all text-sm`}>Cancel</button>
+                                <button onClick={performLogout} className="w-full py-2.5 bg-andersen-red hover:bg-red-700 text-white font-bold rounded-xl transition-all text-sm">Yes, Sign Me Out</button>
+                                <button onClick={() => setShowLogoutConfirm(false)} className={`w-full py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl transition-all text-sm`}>Cancel</button>
                             </div>
                         </motion.div>
                     </motion.div>
@@ -1903,41 +1890,41 @@ const App: React.FC = () => {
 
                 {showExportModal && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                        <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className={`${themeClasses.card} max-w-md w-full p-8 rounded-[2.5rem] border-violet-800/50 shadow-2xl relative`}>
-                            <button onClick={() => setShowExportModal(false)} className="absolute top-6 right-6 p-2 rounded-xl hover:bg-white/10 transition-colors">
-                                <X className={`w-5 h-5 ${theme === 'dark' ? 'text-violet-400' : 'text-slate-500'}`} />
+                        <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className={`${themeClasses.card} max-w-md w-full p-8 rounded-[2.5rem] border-gray-200 shadow-2xl relative`}>
+                            <button onClick={() => setShowExportModal(false)} className="absolute top-6 right-6 p-2 rounded-xl hover:bg-black/5 transition-colors">
+                                <X className={`w-5 h-5 text-slate-500`} />
                             </button>
 
                             <div className="flex flex-col items-center text-center mb-8">
-                                <div className="bg-emerald-600/20 p-4 rounded-2xl mb-4">
-                                    <Download className="w-8 h-8 text-emerald-500" />
+                                <div className="bg-andersen-red/10 p-4 rounded-2xl mb-4">
+                                    <Download className="w-8 h-8 text-andersen-red" />
                                 </div>
-                                <h3 className={`text-xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Export Data</h3>
-                                <p className={`${theme === 'dark' ? 'text-violet-300/60' : 'text-slate-500'} text-sm mt-1`}>Choose your preferred format for the {rows.length} records found.</p>
+                                <h3 className={`text-xl font-bold text-black`}>Export Data</h3>
+                                <p className={`text-slate-500 text-sm mt-1`}>Choose your preferred format for the {rows.length} records found.</p>
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <button onClick={downloadResults} className={`group flex flex-col items-center p-6 rounded-3xl border-2 transition-all duration-300 ${theme === 'dark' ? 'bg-white/5 border-violet-800/30 hover:border-emerald-500/50 hover:bg-emerald-500/5' : 'bg-white border-slate-200 hover:border-emerald-500 hover:bg-emerald-50'}`}>
-                                    <FileSpreadsheet className="w-10 h-10 text-emerald-500 mb-3 group-hover:scale-110 transition-transform" />
-                                    <span className={`font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-800'} text-sm`}>Excel</span>
+                                <button onClick={downloadResults} className={`group flex flex-col items-center p-6 rounded-3xl border-2 transition-all duration-300 bg-white border-slate-200 hover:border-andersen-red hover:bg-andersen-red/5`}>
+                                    <FileSpreadsheet className="w-10 h-10 text-andersen-red mb-3 group-hover:scale-110 transition-transform" />
+                                    <span className={`font-bold text-slate-800 text-sm`}>Excel</span>
                                     <span className="text-[10px] opacity-40 uppercase font-black tracking-widest mt-1">.xlsx format</span>
                                 </button>
-                                <button onClick={downloadResultsJSON} className={`group flex flex-col items-center p-6 rounded-3xl border-2 transition-all duration-300 ${theme === 'dark' ? 'bg-white/5 border-violet-800/30 hover:border-violet-500/50 hover:bg-violet-500/5' : 'bg-white border-slate-200 hover:border-violet-500 hover:bg-violet-50'}`}>
-                                    <Layers className="w-10 h-10 text-violet-500 mb-3 group-hover:scale-110 transition-transform" />
-                                    <span className={`font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-800'} text-sm`}>JSON</span>
+                                <button onClick={downloadResultsJSON} className={`group flex flex-col items-center p-6 rounded-3xl border-2 transition-all duration-300 bg-white border-slate-200 hover:border-andersen-black hover:bg-andersen-black/5`}>
+                                    <Layers className="w-10 h-10 text-andersen-black mb-3 group-hover:scale-110 transition-transform" />
+                                    <span className={`font-bold text-slate-800 text-sm`}>JSON</span>
                                     <span className="text-[10px] opacity-40 uppercase font-black tracking-widest mt-1">.json format</span>
                                 </button>
 
                                 {!isHistoryView && appMode === 'enrich' && (
                                     <>
-                                        <button onClick={handleApiExport} className={`group flex flex-col items-center p-6 rounded-3xl border-2 transition-all duration-300 md:col-span-2 ${theme === 'dark' ? 'bg-white/5 border-violet-800/30 hover:border-blue-500/50 hover:bg-blue-500/5' : 'bg-white border-slate-200 hover:border-blue-500 hover:bg-blue-50'}`}>
-                                            <Webhook className="w-10 h-10 text-blue-500 mb-3 group-hover:scale-110 transition-transform" />
-                                            <span className={`font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-800'} text-sm`}>Sync to API</span>
+                                        <button onClick={handleApiExport} className={`group flex flex-col items-center p-6 rounded-3xl border-2 transition-all duration-300 md:col-span-2 bg-white border-slate-200 hover:border-andersen-red hover:bg-andersen-red/5`}>
+                                            <Webhook className="w-10 h-10 text-andersen-red mb-3 group-hover:scale-110 transition-transform" />
+                                            <span className={`font-bold text-slate-800 text-sm`}>Sync to API</span>
                                             <span className="text-[10px] opacity-40 uppercase font-black tracking-widest mt-1">POST to Webhook</span>
                                         </button>
-                                        <button onClick={() => { setShowExportModal(false); setAppMode('verify'); handleImportFromFinder(); }} className={`group flex flex-col items-center p-6 rounded-3xl border-2 transition-all duration-300 md:col-span-2 ${theme === 'dark' ? 'bg-white/5 border-violet-800/30 hover:border-violet-500/50 hover:bg-violet-500/5' : 'bg-white border-slate-200 hover:border-violet-500 hover:bg-violet-50'}`}>
-                                            <ShieldCheck className="w-10 h-10 text-violet-500 mb-3 group-hover:scale-110 transition-transform" />
-                                            <span className={`font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-800'} text-sm`}>Verify Emails</span>
+                                        <button onClick={() => { setShowExportModal(false); setAppMode('verify'); handleImportFromFinder(); }} className={`group flex flex-col items-center p-6 rounded-3xl border-2 transition-all duration-300 md:col-span-2 bg-white border-slate-200 hover:border-andersen-red hover:bg-andersen-red/5`}>
+                                            <ShieldCheck className="w-10 h-10 text-andersen-red mb-3 group-hover:scale-110 transition-transform" />
+                                            <span className={`font-bold text-slate-800 text-sm`}>Verify Emails</span>
                                             <span className="text-[10px] opacity-40 uppercase font-black tracking-widest mt-1">Check Validity</span>
                                         </button>
                                     </>
@@ -1950,34 +1937,34 @@ const App: React.FC = () => {
                 {showApiResultModal && apiResponseData && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
                         <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className={`${themeClasses.card} max-w-4xl w-full p-8 rounded-[2.5rem] border-violet-800/50 shadow-2xl relative max-h-[80vh] flex flex-col`}>
-                            <button onClick={() => setShowApiResultModal(false)} className="absolute top-6 right-6 p-2 rounded-xl hover:bg-white/10 transition-colors">
-                                <X className={`w-5 h-5 ${theme === 'dark' ? 'text-violet-400' : 'text-slate-500'}`} />
+                            <button onClick={() => setShowApiResultModal(false)} className="absolute top-6 right-6 p-2 rounded-xl hover:bg-black/5 transition-colors">
+                                <X className={`w-5 h-5 text-slate-500`} />
                             </button>
 
                             <div className="flex flex-col items-center text-center mb-6 shrink-0">
-                                <div className="bg-blue-600/20 p-4 rounded-2xl mb-4">
-                                    <Webhook className="w-8 h-8 text-blue-500" />
+                                <div className="bg-andersen-red/10 p-4 rounded-2xl mb-4">
+                                    <Webhook className="w-8 h-8 text-andersen-red" />
                                 </div>
-                                <h3 className={`text-xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>API Sync Results</h3>
-                                <p className={`${theme === 'dark' ? 'text-violet-300/60' : 'text-slate-500'} text-sm mt-1`}>Data returned from the endpoint.</p>
+                                <h3 className={`text-xl font-bold text-black`}>API Sync Results</h3>
+                                <p className={`text-slate-500 text-sm mt-1`}>Data returned from the endpoint.</p>
                             </div>
 
-                            <div className={`flex-1 overflow-auto custom-scrollbar border rounded-2xl p-4 ${theme === 'dark' ? 'bg-black/5 border-white/10' : 'bg-white border-slate-200 shadow-inner'}`}>
+                            <div className={`flex-1 overflow-auto custom-scrollbar border rounded-2xl p-4 bg-white border-slate-200 shadow-inner`}>
                                 {Array.isArray(apiResponseData) ? (
                                     apiResponseData.length === 0 ? <p className="text-center opacity-50">Empty List</p> : (
                                         <table className="w-full text-left border-collapse text-sm">
                                             <thead>
                                                 <tr>
                                                     {Object.keys(apiResponseData[0] || {}).map(k => (
-                                                        <th key={k} className={`p-4 border-b ${theme === 'dark' ? 'border-white/10 text-violet-300' : 'border-slate-100 text-slate-900'} font-bold text-xs uppercase tracking-wider bg-slate-50/50`}>{k}</th>
+                                                        <th key={k} className={`p-4 border-b border-slate-100 text-slate-900 font-bold text-xs uppercase tracking-wider bg-slate-50/50`}>{k}</th>
                                                     ))}
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {apiResponseData.map((row: any, i: number) => (
-                                                    <tr key={i} className={`group ${theme === 'dark' ? 'hover:bg-white/5' : 'hover:bg-black/5'} transition-colors`}>
+                                                    <tr key={i} className={`group hover:bg-black/5 transition-colors`}>
                                                         {Object.keys(apiResponseData[0] || {}).map(k => (
-                                                            <td key={`${i}-${k}`} className={`p-4 border-b ${theme === 'dark' ? 'border-white/10 text-violet-100' : 'border-slate-50 text-slate-800'}`}>
+                                                            <td key={`${i}-${k}`} className={`p-4 border-b border-slate-50 text-slate-800`}>
                                                                 {k === 'final_confidence' && !isNaN(Number(row[k])) ? (
                                                                     `${(Number(row[k]) * 100).toFixed(0)}%`
                                                                 ) : row[k] === true || row[k] === 'true' ? (
@@ -1998,15 +1985,15 @@ const App: React.FC = () => {
                                     <table className="w-full text-left border-collapse text-sm">
                                         <thead>
                                             <tr>
-                                                <th className={`p-4 border-b ${theme === 'dark' ? 'border-white/10 text-violet-300' : 'border-slate-100 text-slate-900'} font-bold text-xs uppercase tracking-wider bg-slate-50/50`}>Key</th>
-                                                <th className={`p-4 border-b ${theme === 'dark' ? 'border-white/10 text-violet-300' : 'border-slate-100 text-slate-900'} font-bold text-xs uppercase tracking-wider bg-slate-50/50`}>Value</th>
+                                                <th className={`p-4 border-b border-slate-100 text-slate-900 font-bold text-xs uppercase tracking-wider bg-slate-50/50`}>Key</th>
+                                                <th className={`p-4 border-b border-slate-100 text-slate-900 font-bold text-xs uppercase tracking-wider bg-slate-50/50`}>Value</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {Object.entries(apiResponseData).map(([k, v]) => (
-                                                <tr key={k} className={`group ${theme === 'dark' ? 'hover:bg-white/5' : 'hover:bg-black/5'} transition-colors`}>
-                                                    <td className={`p-3 border-b ${theme === 'dark' ? 'border-white/10 text-violet-400' : 'border-black/10 text-slate-600'} font-medium`}>{k}</td>
-                                                    <td className={`p-3 border-b ${theme === 'dark' ? 'border-white/10 text-violet-100' : 'border-black/10 text-slate-800'}`}>
+                                                <tr key={k} className={`group hover:bg-black/5 transition-colors`}>
+                                                    <td className={`p-3 border-b border-black/10 text-slate-600 font-medium`}>{k}</td>
+                                                    <td className={`p-3 border-b border-black/10 text-slate-800`}>
                                                         {k === 'final_confidence' && !isNaN(Number(v)) ? (
                                                             `${(Number(v) * 100).toFixed(0)}%`
                                                         ) : v === true || v === 'true' ? (
@@ -2036,23 +2023,23 @@ const App: React.FC = () => {
                             {/* URL Input Section */}
                             <div className={`${themeClasses.card} p-8 rounded-[2rem] border border-violet-800/10 shadow-xl text-center relative overflow-hidden`}>
                                 {isScraping && (
-                                    <div className={`absolute inset-0 z-20 flex flex-col items-center justify-center backdrop-blur-sm ${theme === 'dark' ? 'bg-black/60' : 'bg-white/60'} animate-fade-in`}>
-                                        <Loader2 className="w-10 h-10 animate-spin text-emerald-500 mb-3" />
-                                        <h4 className={`text-lg font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Scanning Page...</h4>
-                                        <p className={`text-sm ${theme === 'dark' ? 'text-violet-300' : 'text-slate-600'} mt-1`}>This may take a few moments.</p>
+                                    <div className={`absolute inset-0 z-20 flex flex-col items-center justify-center backdrop-blur-sm bg-white/60 animate-fade-in`}>
+                                        <Loader2 className="w-10 h-10 animate-spin text-andersen-red mb-3" />
+                                        <h4 className={`text-lg font-bold text-black`}>Scanning Page...</h4>
+                                        <p className={`text-sm text-slate-600 mt-1`}>This may take a few moments.</p>
                                     </div>
                                 )}
                                 <div className="flex flex-col items-center mb-6">
-                                    <div className="bg-emerald-600/10 p-3 rounded-2xl mb-3"><Globe className="w-8 h-8 text-emerald-600" /></div>
-                                    <h3 className={`text-2xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Event Web Scraper</h3>
-                                    <p className={`${theme === 'dark' ? 'text-violet-300/60' : 'text-slate-500'} mt-2 max-w-md`}>Enter an event page URL to automatically extract speakers and attendees for enrichment.</p>
+                                    <div className="bg-andersen-red/10 p-3 rounded-2xl mb-3"><Globe className="w-8 h-8 text-andersen-red" /></div>
+                                    <h3 className={`text-2xl font-bold text-black`}>Event Web Scraper</h3>
+                                    <p className={`text-slate-500 mt-2 max-w-md`}>Enter an event page URL to automatically extract speakers and attendees for enrichment.</p>
                                 </div>
 
                                 <div className="relative max-w-2xl mx-auto">
                                     <input
                                         type="url"
                                         placeholder="https://example.com/event-page"
-                                        className={`w-full pl-6 pr-32 py-4 ${themeClasses.input} rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 transition-all text-sm shadow-inner`}
+                                        className={`w-full pl-6 pr-32 py-4 ${themeClasses.input} rounded-2xl outline-none focus:ring-2 focus:ring-andersen-red transition-all text-sm shadow-inner`}
                                         value={eventUrl}
                                         onChange={(e) => setEventUrl(e.target.value)}
                                         onKeyDown={(e) => e.key === 'Enter' && handleScrape()}
@@ -2061,7 +2048,7 @@ const App: React.FC = () => {
                                     <button
                                         onClick={handleScrape}
                                         disabled={isScraping || !eventUrl}
-                                        className="absolute right-2 top-2 bottom-2 px-6 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold rounded-xl transition-all shadow-lg flex items-center gap-2 text-xs"
+                                        className="absolute right-2 top-2 bottom-2 px-6 bg-andersen-red hover:bg-red-700 disabled:opacity-50 text-white font-bold rounded-xl transition-all shadow-lg flex items-center gap-2 text-xs"
                                     >
                                         {isScraping ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Scrape Page'}
                                     </button>
@@ -2071,36 +2058,36 @@ const App: React.FC = () => {
                             {/* Scraped Results Section */}
                             {scrapedSpeakers.length > 0 && (
                                 <div className={`${themeClasses.card} rounded-[2rem] overflow-hidden flex flex-col shadow-2xl animate-fade-in`}>
-                                    <div className={`px-8 py-6 border-b ${theme === 'dark' ? 'border-white/10' : 'border-black/5'} flex justify-between items-center bg-emerald-600/5`}>
+                                    <div className={`px-8 py-6 border-b border-black/5 flex justify-between items-center bg-gray-50`}>
                                         <div className="flex items-center gap-3">
-                                            <div className="p-2 bg-emerald-600 rounded-lg shadow-lg shadow-emerald-600/20"><Users className="w-5 h-5 text-white" /></div>
+                                            <div className="p-2 bg-andersen-black rounded-lg shadow-lg shadow-black/20"><Users className="w-5 h-5 text-white" /></div>
                                             <div>
-                                                <h4 className={`font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Scraped Leads</h4>
-                                                <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">{scrapedSpeakers.length} Found</span>
+                                                <h4 className={`font-bold text-black`}>Scraped Leads</h4>
+                                                <span className="text-[10px] font-bold text-andersen-red uppercase tracking-widest">{scrapedSpeakers.length} Found</span>
                                             </div>
                                         </div>
                                         <button
                                             onClick={handleProcessLeads}
-                                            className="px-6 py-2.5 bg-violet-600 hover:bg-violet-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-violet-600/30 flex items-center gap-2 text-xs"
+                                            className="px-6 py-2.5 bg-andersen-red hover:bg-red-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-andersen-red/30 flex items-center gap-2 text-xs"
                                         >
                                             Process Leads <ArrowRight className="w-4 h-4" />
                                         </button>
                                     </div>
                                     <div className="max-h-[500px] overflow-y-auto custom-scrollbar p-0">
                                         <table className="w-full text-left border-collapse">
-                                            <thead className={`sticky top-0 z-10 ${theme === 'dark' ? 'bg-[#0f0720]' : 'bg-white'}`}>
+                                            <thead className={`sticky top-0 z-10 bg-white`}>
                                                 <tr>
-                                                    <th className={`px-6 py-4 text-[10px] font-bold ${themeClasses.label} uppercase tracking-[0.2em] border-b ${theme === 'dark' ? 'border-white/10' : 'border-slate-100'}`}>Name</th>
-                                                    <th className={`px-6 py-4 text-[10px] font-bold ${themeClasses.label} uppercase tracking-[0.2em] border-b ${theme === 'dark' ? 'border-white/10' : 'border-slate-100'}`}>Company</th>
-                                                    <th className={`px-6 py-4 text-[10px] font-bold ${themeClasses.label} uppercase tracking-[0.2em] border-b ${theme === 'dark' ? 'border-white/10' : 'border-slate-100'}`}>Role</th>
+                                                    <th className={`px-6 py-4 text-[10px] font-bold ${themeClasses.label} uppercase tracking-[0.2em] border-b border-slate-100`}>Name</th>
+                                                    <th className={`px-6 py-4 text-[10px] font-bold ${themeClasses.label} uppercase tracking-[0.2em] border-b border-slate-100`}>Company</th>
+                                                    <th className={`px-6 py-4 text-[10px] font-bold ${themeClasses.label} uppercase tracking-[0.2em] border-b border-slate-100`}>Role</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {scrapedSpeakers.map((speaker, i) => (
-                                                    <tr key={i} className={`group ${theme === 'dark' ? 'hover:bg-white/5' : 'hover:bg-slate-50'} transition-colors border-b ${theme === 'dark' ? 'border-white/5' : 'border-slate-50'} last:border-0`}>
-                                                        <td className={`px-6 py-3 text-sm font-bold ${theme === 'dark' ? 'text-violet-100' : 'text-slate-700'}`}>{speaker.name}</td>
-                                                        <td className={`px-6 py-3 text-sm ${theme === 'dark' ? 'text-violet-300' : 'text-slate-600'}`}>{speaker.company || '—'}</td>
-                                                        <td className={`px-6 py-3 text-xs font-mono opacity-70 ${theme === 'dark' ? 'text-violet-400' : 'text-slate-500'}`}>{speaker.role || '—'}</td>
+                                                    <tr key={i} className={`group hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0`}>
+                                                        <td className={`px-6 py-3 text-sm font-bold text-slate-700`}>{speaker.name}</td>
+                                                        <td className={`px-6 py-3 text-sm text-slate-600`}>{speaker.company || '—'}</td>
+                                                        <td className={`px-6 py-3 text-xs font-mono opacity-70 text-slate-500`}>{speaker.role || '—'}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -2114,33 +2101,33 @@ const App: React.FC = () => {
                             <div className="lg:col-span-2 space-y-4">
                                 <div className={`${themeClasses.card} p-5 rounded-3xl overflow-hidden flex flex-col h-[calc(100vh-18rem)] min-h-[550px]`}>
                                     <div className="flex items-center gap-2 mb-4">
-                                        <HistoryIcon className="w-4 h-4 text-violet-500" />
-                                        <h3 className={`text-sm font-black uppercase tracking-widest ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Recent activity</h3>
+                                        <HistoryIcon className="w-4 h-4 text-andersen-red" />
+                                        <h3 className={`text-sm font-black uppercase tracking-widest text-slate-900`}>Recent activity</h3>
                                     </div>
                                     <div className="flex gap-4 flex-1 overflow-hidden mb-4">
                                         {/* Bulk Section */}
                                         <div className="flex-1 flex flex-col min-w-0">
-                                            <h4 className={`text-[8px] font-black uppercase tracking-[0.2em] px-2 mb-2 ${theme === 'dark' ? 'text-violet-400/50' : 'text-slate-400'} sticky top-0 z-10 ${theme === 'dark' ? 'bg-[#0f0720]' : 'bg-white'}`}>Bulk Uploads</h4>
+                                            <h4 className={`text-[8px] font-black uppercase tracking-[0.2em] px-2 mb-2 text-slate-400 sticky top-0 z-10 bg-white`}>Bulk Uploads</h4>
                                             <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-2">
                                                 {history[appMode].some(e => e.type === 'bulk') ? (
                                                     history[appMode].filter(e => e.type === 'bulk').map(entry => (
-                                                        <div key={entry.id} onClick={() => loadHistorySession(entry)} className={`p-2.5 rounded-xl border ${theme === 'dark' ? 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-violet-500/50' : 'bg-black/5 border-black/10 hover:bg-black/10 hover:border-violet-500/50'} transition-all cursor-pointer group/item active:scale-95`}>
+                                                        <div key={entry.id} onClick={() => loadHistorySession(entry)} className={`p-2.5 rounded-xl border bg-black/5 border-black/10 hover:bg-black/10 hover:border-andersen-red/50 transition-all cursor-pointer group/item active:scale-95`}>
                                                             <div className="flex items-center justify-between mb-1">
                                                                 <div className="flex items-center gap-1 opacity-40"><Clock className="w-2.5 h-2.5" /><span className="text-[9px]">{new Date(entry.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span></div>
                                                             </div>
-                                                            <p className={`text-[12px] font-bold ${theme === 'dark' ? 'text-violet-100 group-hover/item:text-violet-400' : 'text-slate-700 group-hover/item:text-violet-600'} truncate mb-0.5`}>{formatHistoryInput(entry)}</p>
+                                                            <p className={`text-[12px] font-bold text-slate-700 group-hover/item:text-andersen-red truncate mb-0.5`}>{formatHistoryInput(entry)}</p>
                                                             <div className="flex flex-col gap-1 mt-1">
                                                                 <div className="flex items-center gap-2">
                                                                     <p className={`text-[10px] font-mono ${entry.status.toLowerCase().includes('fail') ? 'text-rose-500' : 'text-emerald-500'} truncate`}>{formatHistoryResult(entry.result)}</p>
                                                                     {entry.hasCached && (
-                                                                        <span className={`text-[7px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border transition-all ${theme === 'dark' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' : 'bg-violet-50 text-violet-600 border-violet-200'}`}>Already Processed</span>
+                                                                        <span className={`text-[7px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border transition-all bg-andersen-red/5 text-andersen-red border-andersen-red/20`}>Already Processed</span>
                                                                     )}
                                                                     {entry.synced && (
-                                                                        <span className={`text-[7px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border transition-all ${theme === 'dark' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-200'}`}>Synced</span>
+                                                                        <span className={`text-[7px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border transition-all bg-blue-50 text-blue-600 border-blue-200`}>Synced</span>
                                                                     )}
                                                                 </div>
                                                                 {entry.hasCached && entry.cachedAt && (
-                                                                    <span className={`text-[8px] font-medium opacity-50 ${theme === 'dark' ? 'text-violet-300' : 'text-slate-500'}`}>
+                                                                    <span className={`text-[8px] font-medium opacity-50 text-slate-500`}>
                                                                         Ran on {new Date(entry.cachedAt).toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}  {entry.cachedType ? `via ${entry.cachedType === 'bulk' ? 'Bulk Upload' : 'Single Try'}` : ''}
                                                                     </span>
                                                                 )}
@@ -2155,27 +2142,27 @@ const App: React.FC = () => {
 
                                         {/* Single Section */}
                                         <div className="flex-1 flex flex-col min-w-0">
-                                            <h4 className={`text-[8px] font-black uppercase tracking-[0.2em] px-2 mb-2 ${theme === 'dark' ? 'text-violet-400/50' : 'text-slate-400'} sticky top-0 z-10 ${theme === 'dark' ? 'bg-[#0f0720]' : 'bg-white'}`}>Single Try</h4>
+                                            <h4 className={`text-[8px] font-black uppercase tracking-[0.2em] px-2 mb-2 text-slate-400 sticky top-0 z-10 bg-white`}>Single Try</h4>
                                             <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-2">
                                                 {history[appMode].some(e => e.type === 'single') ? (
                                                     history[appMode].filter(e => e.type === 'single').map(entry => (
-                                                        <div key={entry.id} onClick={() => loadHistorySession(entry)} className={`p-2.5 rounded-xl border ${theme === 'dark' ? 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-violet-500/50' : 'bg-black/5 border-black/10 hover:bg-black/10 hover:border-violet-500/50'} transition-all cursor-pointer group/item active:scale-95`}>
+                                                        <div key={entry.id} onClick={() => loadHistorySession(entry)} className={`p-2.5 rounded-xl border bg-black/5 border-black/10 hover:bg-black/10 hover:border-andersen-red/50 transition-all cursor-pointer group/item active:scale-95`}>
                                                             <div className="flex items-center justify-between mb-1">
                                                                 <div className="flex items-center gap-1 opacity-40"><Clock className="w-2.5 h-2.5" /><span className="text-[9px]">{new Date(entry.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span></div>
                                                             </div>
-                                                            <p className={`text-[12px] font-bold ${theme === 'dark' ? 'text-violet-100 group-hover/item:text-violet-400' : 'text-slate-700 group-hover/item:text-violet-600'} truncate mb-0.5`}>{formatHistoryInput(entry)}</p>
+                                                            <p className={`text-[12px] font-bold text-slate-700 group-hover/item:text-andersen-red truncate mb-0.5`}>{formatHistoryInput(entry)}</p>
                                                             <div className="flex flex-col gap-1 mt-1">
                                                                 <div className="flex items-center gap-2">
                                                                     <p className={`text-[10px] font-mono ${entry.status.toLowerCase().includes('fail') ? 'text-rose-500' : 'text-emerald-500'} truncate`}>{formatHistoryResult(entry.result)}</p>
                                                                     {entry.hasCached && (
-                                                                        <span className={`text-[7px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border transition-all ${theme === 'dark' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' : 'bg-violet-50 text-violet-600 border-violet-200'}`}>Already Processed</span>
+                                                                        <span className={`text-[7px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border transition-all bg-andersen-red/5 text-andersen-red border-andersen-red/20`}>Already Processed</span>
                                                                     )}
                                                                     {entry.synced && (
-                                                                        <span className={`text-[7px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border transition-all ${theme === 'dark' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-200'}`}>Synced</span>
+                                                                        <span className={`text-[7px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border transition-all bg-blue-50 text-blue-600 border-blue-200`}>Synced</span>
                                                                     )}
                                                                 </div>
                                                                 {entry.hasCached && entry.cachedAt && (
-                                                                    <span className={`text-[8px] font-medium opacity-50 ${theme === 'dark' ? 'text-violet-300' : 'text-slate-500'}`}>
+                                                                    <span className={`text-[8px] font-medium opacity-50 text-slate-500`}>
                                                                         Ran on {new Date(entry.cachedAt).toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}  {entry.cachedType ? `via ${entry.cachedType === 'bulk' ? 'Bulk Upload' : 'Single Try'}` : ''}
                                                                     </span>
                                                                 )}
@@ -2190,40 +2177,40 @@ const App: React.FC = () => {
                                     </div>
 
                                     {/* App Note to cover the space */}
-                                    <div className={`mt-auto p-4 rounded-2xl border ${theme === 'dark' ? 'bg-violet-900/20 border-violet-800/30' : 'bg-violet-50 border-violet-200'} shrink-0`}>
+                                    <div className={`mt-auto p-4 rounded-2xl border bg-andersen-red/5 border-andersen-red/20 shrink-0`}>
                                         <div className="flex items-center gap-2 mb-2">
-                                            <Info className="w-3.5 h-3.5 text-violet-500" />
-                                            <span className={`text-[11px] font-black uppercase tracking-widest ${theme === 'dark' ? 'text-violet-300' : 'text-violet-700'}`}>Pro Insight</span>
+                                            <Info className="w-3.5 h-3.5 text-andersen-red" />
+                                            <span className={`text-[11px] font-black uppercase tracking-widest text-andersen-red`}>Pro Insight</span>
                                         </div>
-                                        <p className={`text-[11px] leading-relaxed ${theme === 'dark' ? 'text-violet-400/80' : 'text-slate-600'}`}>
+                                        <p className={`text-[11px] leading-relaxed text-slate-600`}>
                                             10xMailMatch is your ultimate intelligence layer for lead generation. Powered by Gemini & GetProspect, we seamlessly enrich outreach with verified business emails and LinkedIn profiles.
                                         </p>
                                     </div>
                                 </div>
                             </div>
                             <div className="lg:col-span-3 flex flex-col items-center">
-                                <div className={`mb-1 p-1.5 rounded-2xl border ${theme === 'dark' ? 'bg-violet-900/20 border-violet-800/40' : 'bg-white border-amber-100'} flex gap-1 shadow-sm`}>
-                                    <button onClick={() => setInputMode('bulk')} className={`px-8 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${inputMode === 'bulk' ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/30' : theme === 'dark' ? 'text-violet-400 hover:bg-violet-900/30' : 'text-slate-500 hover:bg-slate-50'}`}><Layers className="w-4 h-4" /> Bulk Upload</button>
-                                    <button onClick={() => setInputMode('single')} className={`px-8 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${inputMode === 'single' ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/30' : theme === 'dark' ? 'text-violet-400 hover:bg-violet-900/30' : 'text-slate-500 hover:bg-slate-50'}`}><MousePointer2 className="w-4 h-4" /> Single Try</button>
+                                <div className={`mb-1 p-1.5 rounded-2xl border bg-black/5 border-black/10 flex gap-1 shadow-inner`}>
+                                    <button onClick={() => setInputMode('bulk')} className={`px-8 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${inputMode === 'bulk' ? 'bg-white text-black shadow-sm' : 'text-slate-500 hover:text-black'}`}><Layers className="w-4 h-4" /> Bulk Upload</button>
+                                    <button onClick={() => setInputMode('single')} className={`px-8 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${inputMode === 'single' ? 'bg-white text-black shadow-sm' : 'text-slate-500 hover:text-black'}`}><MousePointer2 className="w-4 h-4" /> Single Try</button>
                                 </div>
                                 <AnimatePresence mode="wait">
                                     {inputMode === 'bulk' ? (
-                                        <motion.div key="bulk" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className={`w-full flex flex-col items-center justify-center py-8 ${themeClasses.card} rounded-[2rem] border-2 border-dashed ${theme === 'dark' ? 'border-violet-800/40 hover:border-violet-500' : 'border-slate-300 hover:border-violet-400'} transition-all group cursor-pointer relative`}>
-                                            <div className={`${theme === 'dark' ? 'bg-violet-900/30' : 'bg-violet-50'} p-5 rounded-2xl mb-4 group-hover:scale-110 transition-transform shadow-xl`}>{appMode === 'enrich' ? <Search className="w-10 h-10 text-violet-600" /> : appMode === 'linkedin' ? <Linkedin className="w-10 h-10 text-blue-500" /> : <ShieldCheck className="w-10 h-10 text-violet-600" />}</div>
-                                            <p className={`${theme === 'dark' ? 'text-violet-300/60' : 'text-slate-500'} mb-6 text-center text-sm max-w-md`}>Upload your prospect lists (Excel/CSV) to start the {appMode === 'enrich' ? 'enrichment' : appMode === 'linkedin' ? 'LinkedIn search' : 'verification'} process.</p>
+                                        <motion.div key="bulk" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className={`w-full flex flex-col items-center justify-center py-8 ${themeClasses.card} rounded-[2rem] border-2 border-dashed border-slate-300 hover:border-andersen-red/50 transition-all group cursor-pointer relative`}>
+                                            <div className={`bg-andersen-red/5 p-5 rounded-2xl mb-4 group-hover:scale-110 transition-transform shadow-xl`}>{appMode === 'enrich' ? <Search className="w-10 h-10 text-andersen-red" /> : appMode === 'linkedin' ? <Linkedin className="w-10 h-10 text-blue-500" /> : <ShieldCheck className="w-10 h-10 text-andersen-red" />}</div>
+                                            <p className={`text-slate-500 mb-6 text-center text-sm max-w-md`}>Upload your prospect lists (Excel/CSV) to start the {appMode === 'enrich' ? 'enrichment' : appMode === 'linkedin' ? 'LinkedIn search' : 'verification'} process.</p>
                                             <div className="flex flex-col sm:flex-row gap-4 items-center">
-                                                <label className="bg-violet-600 hover:bg-violet-500 text-white font-bold py-3 px-8 rounded-2xl cursor-pointer transition-all shadow-xl hover:shadow-violet-600/30">Select Spreadsheet<input type="file" className="hidden" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} /></label>
-                                                {appMode === 'verify' && resultsFromFinder.length > 0 && <button onClick={(e) => { e.stopPropagation(); handleImportFromFinder(); }} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-6 rounded-2xl transition-all shadow-xl hover:shadow-emerald-600/30 flex items-center gap-2"><ArrowLeftRight className="w-4 h-4" /> Use Found Emails</button>}
-                                                {lastScrapedResults.length > 0 && (appMode === 'linkedin' || appMode === 'enrich') && <button onClick={(e) => { e.stopPropagation(); handleImportFromScraper(appMode === 'linkedin' ? 'linkedin' : 'enrich'); }} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-6 rounded-2xl transition-all shadow-xl hover:shadow-emerald-600/30 flex items-center gap-2"><ArrowLeftRight className="w-4 h-4" /> Use Scraped Results</button>}
+                                                <label className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold py-3 px-8 rounded-2xl cursor-pointer transition-all shadow-sm">Select Spreadsheet<input type="file" className="hidden" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} /></label>
+                                                {appMode === 'verify' && resultsFromFinder.length > 0 && <button onClick={(e) => { e.stopPropagation(); handleImportFromFinder(); }} className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold py-3 px-6 rounded-2xl transition-all shadow-sm flex items-center gap-2"><ArrowLeftRight className="w-4 h-4" /> Use Found Emails</button>}
+                                                {lastScrapedResults.length > 0 && (appMode === 'linkedin' || appMode === 'enrich') && <button onClick={(e) => { e.stopPropagation(); handleImportFromScraper(appMode === 'linkedin' ? 'linkedin' : 'enrich'); }} className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold py-3 px-6 rounded-2xl transition-all shadow-sm flex items-center gap-2"><ArrowLeftRight className="w-4 h-4" /> Use Scraped Results</button>}
                                             </div>
                                         </motion.div>
                                     ) : (
-                                        <motion.div key="single" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className={`w-full max-w-2xl ${themeClasses.card} p-8 rounded-[2rem] border border-violet-800/10 shadow-xl overflow-hidden`}>
+                                        <motion.div key="single" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className={`w-full max-w-2xl ${themeClasses.card} p-8 rounded-[2rem] border border-black/5 shadow-xl overflow-hidden`}>
                                             <div className="flex items-center justify-between mb-6">
                                                 <div className="w-10" /> {/* Spacer */}
                                                 <div className="flex flex-col items-center text-center">
-                                                    <div className="bg-violet-600/10 p-2.5 rounded-xl mb-2"><Zap className="w-6 h-6 text-violet-600" /></div>
-                                                    <h3 className={`text-2xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Individual {appMode === 'verify' ? 'Check' : 'Search'}</h3>
+                                                    <div className="bg-andersen-red/10 p-2.5 rounded-xl mb-2"><Zap className="w-6 h-6 text-andersen-red" /></div>
+                                                    <h3 className={`text-2xl font-bold text-slate-900`}>Individual {appMode === 'verify' ? 'Check' : 'Search'}</h3>
                                                     {singleResult && isHistoryView && appMode === 'enrich' && (
                                                         <button
                                                             onClick={handleGetApiResults}
@@ -2235,7 +2222,7 @@ const App: React.FC = () => {
                                                 </div>
                                                 <button
                                                     onClick={() => { setSingleName(''); setSingleCompany(''); setSingleEmail(''); setSingleResult(null); setIsHistoryView(false); }}
-                                                    className={`text-[10px] font-bold uppercase tracking-widest px-3 py-2 rounded-lg transition-all ${theme === 'dark' ? 'text-rose-400 hover:bg-rose-500/10' : 'text-rose-600 hover:bg-rose-50'}`}
+                                                    className={`text-[10px] font-bold uppercase tracking-widest px-3 py-2 rounded-lg transition-all text-rose-600 hover:bg-rose-50`}
                                                 >
                                                     Clear All
                                                 </button>
@@ -2247,9 +2234,9 @@ const App: React.FC = () => {
                                                             <label className={`block text-[11px] font-bold ${themeClasses.label} uppercase tracking-widest ml-1`}>Name</label>
                                                             <div className="relative">
                                                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                                                    <User className={`h-5 w-5 ${theme === 'dark' ? 'text-violet-400/50' : 'text-slate-400'}`} />
+                                                                    <User className={`h-5 w-5 text-slate-400`} />
                                                                 </div>
-                                                                <input type="text" className={`w-full pl-10 pr-10 py-3.5 ${themeClasses.input} rounded-xl outline-none focus:ring-2 focus:ring-violet-600 transition-all text-sm`} value={singleName} onChange={(e) => setSingleName(e.target.value)} />
+                                                                <input type="text" className={`w-full pl-10 pr-10 py-3.5 ${themeClasses.input} rounded-xl outline-none focus:ring-2 focus:ring-andersen-red transition-all text-sm`} value={singleName} onChange={(e) => setSingleName(e.target.value)} />
                                                                 {singleName && (
                                                                     <button onClick={() => setSingleName('')} className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-rose-500 transition-colors">
                                                                         <X className="w-4 h-4" />
@@ -2261,9 +2248,9 @@ const App: React.FC = () => {
                                                             <label className={`block text-[11px] font-bold ${themeClasses.label} uppercase tracking-widest ml-1`}>Company/Domain</label>
                                                             <div className="relative">
                                                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                                                    <Building2 className={`h-5 w-5 ${theme === 'dark' ? 'text-violet-400/50' : 'text-slate-400'}`} />
+                                                                    <Building2 className={`h-5 w-5 text-slate-400`} />
                                                                 </div>
-                                                                <input type="text" className={`w-full pl-10 pr-10 py-3.5 ${themeClasses.input} rounded-xl outline-none focus:ring-2 focus:ring-violet-600 transition-all text-sm`} value={singleCompany} onChange={(e) => setSingleCompany(e.target.value)} />
+                                                                <input type="text" className={`w-full pl-10 pr-10 py-3.5 ${themeClasses.input} rounded-xl outline-none focus:ring-2 focus:ring-andersen-red transition-all text-sm`} value={singleCompany} onChange={(e) => setSingleCompany(e.target.value)} />
                                                                 {singleCompany && (
                                                                     <button onClick={() => setSingleCompany('')} className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-rose-500 transition-colors">
                                                                         <X className="w-4 h-4" />
@@ -2277,9 +2264,9 @@ const App: React.FC = () => {
                                                         <label className={`block text-[11px] font-bold ${themeClasses.label} uppercase tracking-widest ml-1`}>Email</label>
                                                         <div className="relative">
                                                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                                                <Mail className={`h-5 w-5 ${theme === 'dark' ? 'text-violet-400/50' : 'text-slate-400'}`} />
+                                                                <Mail className={`h-5 w-5 text-slate-400`} />
                                                             </div>
-                                                            <input type="email" className={`w-full pl-10 pr-10 py-3.5 ${themeClasses.input} rounded-xl outline-none focus:ring-2 focus:ring-violet-600 transition-all text-sm`} value={singleEmail} onChange={(e) => setSingleEmail(e.target.value)} />
+                                                            <input type="email" className={`w-full pl-10 pr-10 py-3.5 ${themeClasses.input} rounded-xl outline-none focus:ring-2 focus:ring-andersen-red transition-all text-sm`} value={singleEmail} onChange={(e) => setSingleEmail(e.target.value)} />
                                                             {singleEmail && (
                                                                 <button onClick={() => setSingleEmail('')} className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-rose-500 transition-colors">
                                                                     <X className="w-4 h-4" />
@@ -2288,11 +2275,11 @@ const App: React.FC = () => {
                                                         </div>
                                                     </div>
                                                 )}
-                                                <button onClick={handleSingleAction} disabled={isProcessing} className="w-full py-4 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white font-bold rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 text-base">{isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : (appMode === 'enrich' ? 'Find Email' : appMode === 'linkedin' ? 'Find LinkedIn' : 'Verify Email')}</button>
+                                                <button onClick={handleSingleAction} disabled={isProcessing} className="w-full py-4 bg-andersen-red hover:bg-red-700 disabled:opacity-50 text-white font-bold rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 text-base">{isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : (appMode === 'enrich' ? 'Find Email' : appMode === 'linkedin' ? 'Find LinkedIn' : 'Verify Email')}</button>
                                                 {singleResult && (
-                                                    <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className={`mt-4 p-4 rounded-2xl ${theme === 'dark' ? 'bg-violet-950/40 border-violet-800/40' : 'bg-white border-amber-100'} border flex flex-col items-center text-center`}>
+                                                    <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className={`mt-4 p-4 rounded-2xl bg-white border border-slate-100 flex flex-col items-center text-center shadow-sm`}>
                                                         <div className="flex flex-col items-center gap-2 w-full">
-                                                            {singleResult.email && <div className="flex flex-col items-center w-full"><span className={`text-[9px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1`}>Email Found</span><div className="flex items-center gap-2 w-full justify-center"><span className={`text-sm font-mono font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'} px-3 py-1.5 bg-violet-600/10 rounded-lg break-all`}>{singleResult.email}</span><button onClick={() => copyToClipboard(singleResult.email!)} className="p-1.5 hover:bg-violet-600/10 rounded-md text-violet-600"><Copy className="w-4 h-4" /></button></div></div>}
+                                                            {singleResult.email && <div className="flex flex-col items-center w-full"><span className={`text-[9px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1`}>Email Found</span><div className="flex items-center gap-2 w-full justify-center"><span className={`text-sm font-mono font-bold text-slate-900 px-3 py-1.5 bg-andersen-red/5 rounded-lg break-all`}>{singleResult.email}</span><button onClick={() => copyToClipboard(singleResult.email!)} className="p-1.5 hover:bg-andersen-red/10 rounded-md text-andersen-red"><Copy className="w-4 h-4" /></button></div></div>}
                                                             {singleResult.linkedinUrl && <div className="flex flex-col items-center w-full"><span className={`text-[9px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1`}>LinkedIn Profile</span><div className="flex items-center gap-2 w-full justify-center"><a href={singleResult.linkedinUrl} target="_blank" rel="noreferrer" className={`text-sm font-mono font-bold text-blue-500 hover:underline px-3 py-1.5 bg-blue-500/10 rounded-lg flex items-center gap-1.5 break-all`}>View Profile <ExternalLink className="w-3.5 h-3.5" /></a><button onClick={() => copyToClipboard(singleResult.linkedinUrl!)} className="p-1.5 hover:bg-blue-600/10 rounded-md text-blue-500"><Copy className="w-4 h-4" /></button></div></div>}
                                                         </div>
                                                         <div className="mt-2 flex flex-col items-center">
@@ -2304,7 +2291,7 @@ const App: React.FC = () => {
                                                                         <button
                                                                             onClick={handleSingleRetry}
                                                                             disabled={isProcessing}
-                                                                            className={`p-1.5 rounded-lg transition-all ${theme === 'dark' ? 'bg-violet-900/40 hover:bg-violet-900/60 text-violet-400' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'} disabled:opacity-50`}
+                                                                            className={`p-1.5 rounded-lg transition-all bg-slate-100 hover:bg-slate-200 text-slate-600 disabled:opacity-50`}
                                                                             title="Retry fresh API call"
                                                                         >
                                                                             <RotateCw className={cn("w-3.5 h-3.5", isProcessing && "animate-spin")} />
@@ -2313,16 +2300,16 @@ const App: React.FC = () => {
                                                                 </div>
                                                                 {singleResult.metadata?.cached && (
                                                                     <div className="flex flex-col items-center gap-1">
-                                                                        <div className={`inline-flex items-center justify-center gap-1 text-[7px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border ${theme === 'dark' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' : 'bg-violet-50 text-violet-600 border-violet-200'}`}>
+                                                                        <div className={`inline-flex items-center justify-center gap-1 text-[7px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border transition-all bg-andersen-red/5 text-andersen-red border-andersen-red/20`}>
                                                                             Already Processed
                                                                         </div>
                                                                         {singleResult.metadata?.synced && (
-                                                                            <div className={`inline-flex items-center justify-center gap-1 text-[7px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border transition-all ${theme === 'dark' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-200'}`}>
+                                                                            <div className={`inline-flex items-center justify-center gap-1 text-[7px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border transition-all bg-blue-50 text-blue-600 border-blue-200`}>
                                                                                 Synced
                                                                             </div>
                                                                         )}
                                                                         {singleResult.cachedAt && (
-                                                                            <span className={`text-[8px] font-medium opacity-60 ${theme === 'dark' ? 'text-violet-300' : 'text-slate-500'}`}>
+                                                                            <span className={`text-[8px] font-medium opacity-60 text-slate-500`}>
                                                                                 Ran on {new Date(singleResult.cachedAt).toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })} {singleResult.cachedType ? `via ${singleResult.cachedType === 'bulk' ? 'Bulk Upload' : 'Single Try'}` : ''}
                                                                             </span>
                                                                         )}
@@ -2334,7 +2321,7 @@ const App: React.FC = () => {
                                                         {appMode === 'enrich' && !isHistoryView && (
                                                             <button
                                                                 onClick={handleSingleApiExport}
-                                                                className={`mt-4 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all border ${theme === 'dark' ? 'bg-blue-900/20 border-blue-800/40 text-blue-400 hover:bg-blue-900/40' : 'bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100'}`}
+                                                                className={`mt-4 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all border bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100`}
                                                             >
                                                                 <Webhook className="w-3 h-3" /> Sync to API
                                                             </button>
@@ -2352,25 +2339,25 @@ const App: React.FC = () => {
                     <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 items-start">
                         <div className="lg:col-span-1 space-y-6">
                             <div className={`${themeClasses.card} p-6 rounded-3xl`}>
-                                <div className="flex items-center justify-between mb-4"><h3 className={`text-sm font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'} flex items-center gap-2`}><FileSpreadsheet className="w-4 h-4 text-violet-600" /> Mapping</h3><button onClick={() => { setFile(null); setRows([]); }} className="text-[10px] text-rose-500 hover:underline font-bold">Discard</button></div>
-                                <div className={`p-2 ${theme === 'dark' ? 'bg-white/5 border-white/10 text-violet-200' : 'bg-black/5 border-black/10 text-slate-700'} rounded-lg border text-[10px] font-medium truncate mb-4`}>{file.name}</div>
+                                <div className="flex items-center justify-between mb-4"><h3 className={`text-sm font-bold text-slate-900 flex items-center gap-2`}><FileSpreadsheet className="w-4 h-4 text-andersen-red" /> Mapping</h3><button onClick={() => { setFile(null); setRows([]); }} className="text-[10px] text-rose-500 hover:underline font-bold">Discard</button></div>
+                                <div className={`p-2 bg-black/5 border-black/10 text-slate-700 rounded-lg border text-[10px] font-medium truncate mb-4`}>{file.name}</div>
                                 <div className="space-y-4">
                                     {appMode === 'enrich' || appMode === 'linkedin' ? (
                                         <>
-                                            <div><label className={`block text-[9px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1 ml-1`}>{appMode === 'linkedin' ? 'FULLNAME' : 'Full Name Column'}</label><select className={`w-full p-2 ${themeClasses.input} rounded-lg text-xs font-medium focus:ring-2 focus:ring-violet-500 outline-none transition-all appearance-none cursor-pointer`} value={mapping?.nameHeader || ''} onChange={(e) => { const val = e.target.value; setMapping(prev => ({ ...prev!, nameHeader: val })); setRows(prevRows => prevRows.map(r => ({ ...r, name: String(r.originalData[val] || '').trim() }))); }} disabled={isProcessing}><option value="">Select Column</option>{headers.map(h => <option key={h} value={h} className={theme === 'dark' ? "bg-[#0f0720]" : "bg-white"}>{h}</option>)}</select></div>
-                                            <div><label className={`block text-[9px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1 ml-1`}>{appMode === 'linkedin' ? 'COMPANY NAME' : 'Company/Domain Column'}</label><select className={`w-full p-2 ${themeClasses.input} rounded-lg text-xs font-medium focus:ring-2 focus:ring-violet-500 outline-none transition-all appearance-none cursor-pointer`} value={mapping?.companyHeader || ''} onChange={(e) => { const val = e.target.value; setMapping(prev => ({ ...prev!, companyHeader: val })); setRows(prevRows => prevRows.map(r => ({ ...r, company: String(r.originalData[val] || '').trim() }))); }} disabled={isProcessing}><option value="">Select Column</option>{headers.map(h => <option key={h} value={h} className={theme === 'dark' ? "bg-[#0f0720]" : "bg-white"}>{h}</option>)}</select></div>
+                                            <div><label className={`block text-[9px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1 ml-1`}>{appMode === 'linkedin' ? 'FULLNAME' : 'Full Name Column'}</label><select className={`w-full p-2 ${themeClasses.input} rounded-lg text-xs font-medium focus:ring-2 focus:ring-andersen-red outline-none transition-all appearance-none cursor-pointer`} value={mapping?.nameHeader || ''} onChange={(e) => { const val = e.target.value; setMapping(prev => ({ ...prev!, nameHeader: val })); setRows(prevRows => prevRows.map(r => ({ ...r, name: String(r.originalData[val] || '').trim() }))); }} disabled={isProcessing}><option value="">Select Column</option>{headers.map(h => <option key={h} value={h} className="bg-white">{h}</option>)}</select></div>
+                                            <div><label className={`block text-[9px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1 ml-1`}>{appMode === 'linkedin' ? 'COMPANY NAME' : 'Company/Domain Column'}</label><select className={`w-full p-2 ${themeClasses.input} rounded-lg text-xs font-medium focus:ring-2 focus:ring-andersen-red outline-none transition-all appearance-none cursor-pointer`} value={mapping?.companyHeader || ''} onChange={(e) => { const val = e.target.value; setMapping(prev => ({ ...prev!, companyHeader: val })); setRows(prevRows => prevRows.map(r => ({ ...r, company: String(r.originalData[val] || '').trim() }))); }} disabled={isProcessing}><option value="">Select Column</option>{headers.map(h => <option key={h} value={h} className="bg-white">{h}</option>)}</select></div>
                                         </>
                                     ) : (
-                                        <div><label className={`block text-[9px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1 ml-1`}>Email Column to Verify</label><select className={`w-full p-2 ${themeClasses.input} rounded-lg text-xs font-medium focus:ring-2 focus:ring-violet-500 outline-none transition-all appearance-none cursor-pointer`} value={mapping?.emailHeader || ''} onChange={(e) => { const val = e.target.value; setMapping(prev => ({ ...prev!, emailHeader: val })); setRows(prevRows => prevRows.map(r => ({ ...r, email: String(r.originalData[val] || '').trim() }))); }} disabled={isProcessing}><option value="">Select Column</option>{headers.map(h => <option key={h} value={h} className={theme === 'dark' ? "bg-[#0f0720]" : "bg-white"}>{h}</option>)}</select></div>
+                                        <div><label className={`block text-[9px] font-bold ${themeClasses.label} uppercase tracking-widest mb-1 ml-1`}>Email Column to Verify</label><select className={`w-full p-2 ${themeClasses.input} rounded-lg text-xs font-medium focus:ring-2 focus:ring-andersen-red outline-none transition-all appearance-none cursor-pointer`} value={mapping?.emailHeader || ''} onChange={(e) => { const val = e.target.value; setMapping(prev => ({ ...prev!, emailHeader: val })); setRows(prevRows => prevRows.map(r => ({ ...r, email: String(r.originalData[val] || '').trim() }))); }} disabled={isProcessing}><option value="">Select Column</option>{headers.map(h => <option key={h} value={h} className="bg-white">{h}</option>)}</select></div>
                                     )}
-                                    <button onClick={startProcessing} disabled={isProcessing || !mapping} className="w-full py-2.5 mt-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:text-white/80 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-xl text-xs">{isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : (appMode === 'enrich' ? <Mail className="w-4 h-4" /> : appMode === 'linkedin' ? <Linkedin className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />)}{isProcessing ? 'Processing...' : (appMode === 'enrich' ? 'Run Enrichment' : appMode === 'linkedin' ? 'Find Profiles' : 'Run Verification')}</button>
+                                    <button onClick={startProcessing} disabled={isProcessing || !mapping} className="w-full py-2.5 mt-2 bg-andersen-red hover:bg-red-700 disabled:opacity-50 disabled:text-white/80 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-xl text-xs">{isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : (appMode === 'enrich' ? <Mail className="w-4 h-4" /> : appMode === 'linkedin' ? <Linkedin className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />)}{isProcessing ? 'Processing...' : (appMode === 'enrich' ? 'Run Enrichment' : appMode === 'linkedin' ? 'Find Profiles' : 'Run Verification')}</button>
                                 </div>
                             </div>
                             <div className={`${themeClasses.card} p-6 rounded-3xl`}>
-                                <h3 className={`text-sm font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'} mb-2 flex items-center gap-2`}><BarChart2 className="w-4 h-4 text-emerald-500" /> Analytics</h3>
+                                <h3 className={`text-sm font-bold text-slate-900 mb-2 flex items-center gap-2`}><BarChart2 className="w-4 h-4 text-emerald-500" /> Analytics</h3>
                                 {stats.length > 0 ? (
-                                    <div className="h-40 mt-1"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={stats} innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value">{stats.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />)}</Pie><Tooltip contentStyle={{ fontSize: '12px', fontWeight: 'bold', backgroundColor: theme === 'dark' ? '#1e1b4b' : '#fff', border: theme === 'dark' ? '1px solid rgba(139, 92, 246, 0.3)' : '1px solid #e2e8f0', borderRadius: '10px', color: theme === 'dark' ? '#fff' : '#000' }} itemStyle={{ color: theme === 'dark' ? '#fff' : '#000' }} labelStyle={{ color: theme === 'dark' ? '#fff' : '#000' }} /><Legend iconSize={8} wrapperStyle={{ fontSize: '9px' }} /></PieChart></ResponsiveContainer></div>
-                                ) : <div className={`text-center py-10 ${theme === 'dark' ? 'text-violet-400/30' : 'text-slate-400'} text-[9px] font-bold uppercase tracking-widest`}>Awaiting Data</div>}
+                                    <div className="h-40 mt-1"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={stats} innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value">{stats.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />)}</Pie><Tooltip contentStyle={{ fontSize: '12px', fontWeight: 'bold', backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '10px', color: '#000' }} itemStyle={{ color: '#000' }} labelStyle={{ color: '#000' }} /><Legend iconSize={8} wrapperStyle={{ fontSize: '9px' }} /></PieChart></ResponsiveContainer></div>
+                                ) : <div className={`text-center py-10 text-slate-400 text-[9px] font-bold uppercase tracking-widest`}>Awaiting Data</div>}
                                 {rows.some(r => r.status !== 'pending' && r.status !== 'processing') && (
                                     <div className="flex flex-col gap-2 mt-4">
                                         <button onClick={() => setShowExportModal(true)} className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 transition-all font-bold text-[10px] shadow-lg"><Download className="w-3 h-3" /> Export</button>
@@ -2380,9 +2367,9 @@ const App: React.FC = () => {
                         </div>
                         <div className="lg:col-span-3">
                             <div className={`${themeClasses.card} rounded-3xl overflow-hidden flex flex-col h-[calc(100vh-10rem)]`}>
-                                <div className={`px-8 py-6 border-b ${theme === 'dark' ? 'border-white/10' : 'border-black/5'} flex justify-between items-center`}>
+                                <div className={`px-8 py-6 border-b border-black/5 flex justify-between items-center`}>
                                     <div className="flex flex-col">
-                                        <h4 className={`font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{appMode === 'enrich' ? 'Enrichment Feed' : appMode === 'linkedin' ? 'LinkedIn Profiles' : 'Verification Feed'}</h4>
+                                        <h4 className={`font-bold text-slate-900`}>{appMode === 'enrich' ? 'Enrichment Feed' : appMode === 'linkedin' ? 'LinkedIn Profiles' : 'Verification Feed'}</h4>
                                         <span className={`text-[10px] font-bold ${themeClasses.label} uppercase tracking-widest`}>{rows.length} Total Records</span>
                                     </div>
                                     {rows.some(r => r.status !== 'pending' && r.status !== 'processing') && (
@@ -2420,28 +2407,28 @@ const App: React.FC = () => {
                                         <tbody className="px-4">
                                             {rows.map((row) => (
                                                 <tr key={row.id} className={`group ${themeClasses.tableRow} transition-all`}>
-                                                    {(appMode === 'enrich' || appMode === 'linkedin') && <td className={`px-6 py-3 first:rounded-l-2xl ${themeClasses.tableCell} transition-colors`}><div className="flex flex-col"><span className={`text-sm font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'} flex items-center gap-2`}><User className="w-3.5 h-3.5 text-violet-600" />{row.name || row.originalData[mapping?.nameHeader || ''] || '—'}</span><span className={`text-[11px] font-medium ${theme === 'dark' ? 'text-violet-400/60' : 'text-slate-500'} flex items-center gap-2 mt-1`}><Building2 className="w-3 h-3" />{row.company || row.originalData[mapping?.companyHeader || ''] || '—'}</span></div></td>}
+                                                    {(appMode === 'enrich' || appMode === 'linkedin') && <td className={`px-6 py-3 first:rounded-l-2xl ${themeClasses.tableCell} transition-colors`}><div className="flex flex-col"><span className={`text-sm font-bold text-slate-900 flex items-center gap-2`}><User className="w-3.5 h-3.5 text-andersen-red" />{row.name || row.originalData[mapping?.nameHeader || ''] || '—'}</span><span className={`text-[11px] font-medium text-slate-500 flex items-center gap-2 mt-1`}><Building2 className="w-3 h-3" />{row.company || row.originalData[mapping?.companyHeader || ''] || '—'}</span></div></td>}
                                                     {appMode !== 'linkedin' && (
-                                                        <td className={`px-6 py-3 ${themeClasses.tableCell} transition-colors`}>{row.email ? <div className="flex items-center gap-3"><span className={`text-sm font-mono ${theme === 'dark' ? 'text-violet-100 bg-white/5' : 'text-slate-700 bg-black/5'} px-3 py-1.5 rounded-lg border ${theme === 'dark' ? 'border-white/10' : 'border-black/10'} break-all`}>{row.email}</span><button onClick={() => copyToClipboard(row.email!)} className={`p-1.5 ${theme === 'dark' ? 'hover:bg-violet-500/20 text-violet-400' : 'hover:bg-amber-200 text-slate-500'} rounded-md transition-all hover:text-violet-600`}><Copy className="w-4 h-4" /></button></div> : <span className={`text-[11px] font-bold ${themeClasses.statusPending} uppercase tracking-widest italic`}>Ready</span>}</td>
+                                                        <td className={`px-6 py-3 ${themeClasses.tableCell} transition-colors`}>{row.email ? <div className="flex items-center gap-3"><span className={`text-sm font-mono text-slate-700 bg-black/5 px-3 py-1.5 rounded-lg border border-black/10 break-all`}>{row.email}</span><button onClick={() => copyToClipboard(row.email!)} className={`p-1.5 hover:bg-andersen-red/10 rounded-md transition-all text-slate-500 hover:text-andersen-red`}><Copy className="w-4 h-4" /></button></div> : <span className={`text-[11px] font-bold ${themeClasses.statusPending} uppercase tracking-widest italic`}>Ready</span>}</td>
                                                     )}
                                                     {appMode === 'linkedin' && (
-                                                        <td className={`px-6 py-3 ${themeClasses.tableCell} transition-colors`}>{row.linkedinUrl ? <div className="flex items-center gap-3"><a href={row.linkedinUrl} target="_blank" rel="noreferrer" className={`text-sm font-mono text-blue-500 hover:underline flex items-center gap-1.5 break-all`}><Linkedin className="w-3.5 h-3.5" /> Profile</a><button onClick={() => copyToClipboard(row.linkedinUrl!)} className={`p-1.5 ${theme === 'dark' ? 'hover:bg-violet-500/20 text-violet-400' : 'hover:bg-amber-200 text-slate-500'} rounded-md transition-all`}><Copy className="w-4 h-4" /></button></div> : <span className={`text-[11px] font-bold ${themeClasses.statusPending} uppercase tracking-widest italic`}>Ready</span>}</td>
+                                                        <td className={`px-6 py-3 ${themeClasses.tableCell} transition-colors`}>{row.linkedinUrl ? <div className="flex items-center gap-3"><a href={row.linkedinUrl} target="_blank" rel="noreferrer" className={`text-sm font-mono text-blue-500 hover:underline flex items-center gap-1.5 break-all`}><Linkedin className="w-3.5 h-3.5" /> Profile</a><button onClick={() => copyToClipboard(row.linkedinUrl!)} className={`p-1.5 hover:bg-blue-50 text-slate-500 rounded-md transition-all`}><Copy className="w-4 h-4" /></button></div> : <span className={`text-[11px] font-bold ${themeClasses.statusPending} uppercase tracking-widest italic`}>Ready</span>}</td>
                                                     )}
                                                     <td className={`px-6 py-3 last:rounded-r-2xl ${themeClasses.tableCell} transition-colors text-center`}>
                                                         <div className="flex flex-col items-center gap-1">
-                                                            <div className={`inline-flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em] px-4 py-1.5 rounded-full border shadow-sm transition-all duration-300 min-w-[120px] ${row.status === 'processing' || row.status === 'searching' ? 'text-violet-600 bg-violet-100 border-violet-200 animate-pulse' : row.status === 'completed' || row.status === 'deliverable' || row.status === 'found' ? 'text-green-700 bg-green-100 border-green-200' : row.status === 'not_found' || row.status === 'risky' ? 'text-amber-700 bg-amber-100 border-amber-200' : row.status === 'failed' || row.status === 'undeliverable' ? 'text-rose-700 bg-rose-100 border-rose-200' : row.status === 'unknown' ? 'text-slate-600 bg-slate-100 border-slate-200' : themeClasses.statusPending}`}>{(row.status === 'processing' || row.status === 'searching') && <Loader2 className="w-3 h-3 animate-spin" />}{row.status === 'deliverable' ? 'VALID' : (row.status === 'undeliverable' ? 'INVALID' : row.status)}</div>
+                                                            <div className={`inline-flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em] px-4 py-1.5 rounded-full border shadow-sm transition-all duration-300 min-w-[120px] ${row.status === 'processing' || row.status === 'searching' ? 'text-andersen-red bg-andersen-red/10 border-andersen-red/20 animate-pulse' : row.status === 'completed' || row.status === 'deliverable' || row.status === 'found' ? 'text-green-700 bg-green-100 border-green-200' : row.status === 'not_found' || row.status === 'risky' ? 'text-amber-700 bg-amber-100 border-amber-200' : row.status === 'failed' || row.status === 'undeliverable' ? 'text-rose-700 bg-rose-100 border-rose-200' : row.status === 'unknown' ? 'text-slate-600 bg-slate-100 border-slate-200' : themeClasses.statusPending}`}>{(row.status === 'processing' || row.status === 'searching') && <Loader2 className="w-3 h-3 animate-spin" />}{row.status === 'deliverable' ? 'VALID' : (row.status === 'undeliverable' ? 'INVALID' : row.status)}</div>
                                                             {row.metadata?.cached && (
                                                                 <div className="flex flex-col items-center gap-1">
-                                                                    <div className={`inline-flex items-center justify-center gap-1 text-[7px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border ${theme === 'dark' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' : 'bg-violet-50 text-violet-600 border-violet-200'}`}>
+                                                                    <div className={`inline-flex items-center justify-center gap-1 text-[7px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border bg-andersen-red/5 text-andersen-red border-andersen-red/20`}>
                                                                         Already Processed
                                                                     </div>
                                                                     {(row.synced || row.metadata?.synced) && (
-                                                                        <div className={`inline-flex items-center justify-center gap-1 text-[7px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border transition-all ${theme === 'dark' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-200'}`}>
+                                                                        <div className={`inline-flex items-center justify-center gap-1 text-[7px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border transition-all bg-blue-50 text-blue-600 border-blue-200`}>
                                                                             Synced
                                                                         </div>
                                                                     )}
                                                                     {row.cachedAt && (
-                                                                        <span className={`text-[8px] font-medium opacity-60 ${theme === 'dark' ? 'text-violet-300' : 'text-slate-500'}`}>
+                                                                        <span className={`text-[8px] font-medium opacity-60 text-slate-500`}>
                                                                             Ran on {new Date(row.cachedAt).toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}  {row.cachedType ? `via ${row.cachedType === 'bulk' ? 'Bulk Upload' : 'Single Try'}` : ''}
                                                                         </span>
                                                                     )}
