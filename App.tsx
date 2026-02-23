@@ -1857,10 +1857,10 @@ const App: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-4">
                     <div className={`flex bg-black/5 border-black/10 p-1 rounded-xl border`}>
-                        <button onClick={() => handleTabSwitch('enrich')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${appMode === 'enrich' ? 'bg-andersen-red text-white shadow-lg shadow-andersen-red/20' : 'bg-white text-black hover:bg-gray-100'}`}>Email Finder</button>
-                        <button onClick={() => handleTabSwitch('verify')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${appMode === 'verify' ? 'bg-andersen-red text-white shadow-lg shadow-andersen-red/20' : 'bg-white text-black hover:bg-gray-100'}`}>Email Verifier</button>
-                        <button onClick={() => handleTabSwitch('linkedin')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${appMode === 'linkedin' ? 'bg-andersen-red text-white shadow-lg shadow-andersen-red/20' : 'bg-white text-black hover:bg-gray-100'}`}>LinkedIn Finder</button>
-                        <button onClick={() => handleTabSwitch('event-scraper')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${appMode === 'event-scraper' ? 'bg-andersen-red text-white shadow-lg shadow-andersen-red/20' : 'bg-white text-black hover:bg-gray-100'}`}>Event Scraper</button>
+                        <button onClick={() => handleTabSwitch('enrich')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${appMode === 'enrich' ? 'bg-white text-black shadow-sm' : 'text-slate-500 hover:text-black'}`}>Email Finder</button>
+                        <button onClick={() => handleTabSwitch('verify')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${appMode === 'verify' ? 'bg-white text-black shadow-sm' : 'text-slate-500 hover:text-black'}`}>Email Verifier</button>
+                        <button onClick={() => handleTabSwitch('linkedin')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${appMode === 'linkedin' ? 'bg-white text-black shadow-sm' : 'text-slate-500 hover:text-black'}`}>LinkedIn Finder</button>
+                        <button onClick={() => handleTabSwitch('event-scraper')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${appMode === 'event-scraper' ? 'bg-white text-black shadow-sm' : 'text-slate-500 hover:text-black'}`}>Event Scraper</button>
                     </div>
                     <div className="flex items-center gap-2">
                         <button
@@ -2093,19 +2093,19 @@ const App: React.FC = () => {
                                             <div className="flex bg-black/5 border-black/10 p-1 rounded-xl border">
                                                 <button
                                                     onClick={() => setScraperTransferTarget('enrich')}
-                                                    className={`px-4 py-2 rounded-lg text-[10px] font-bold transition-all whitespace-nowrap uppercase tracking-wider ${scraperTransferTarget === 'enrich' ? 'bg-andersen-red text-white shadow-lg shadow-andersen-red/20' : 'bg-white text-black hover:bg-gray-100'}`}
+                                                    className={`px-4 py-2 rounded-lg text-[10px] font-bold transition-all whitespace-nowrap uppercase tracking-wider ${scraperTransferTarget === 'enrich' ? 'bg-white text-black shadow-sm' : 'text-slate-500 hover:text-black'}`}
                                                 >
                                                     Find Emails
                                                 </button>
                                                 <button
                                                     onClick={() => setScraperTransferTarget('linkedin')}
-                                                    className={`px-4 py-2 rounded-lg text-[10px] font-bold transition-all whitespace-nowrap uppercase tracking-wider ${scraperTransferTarget === 'linkedin' ? 'bg-andersen-red text-white shadow-lg shadow-andersen-red/20' : 'bg-white text-black hover:bg-gray-100'}`}
+                                                    className={`px-4 py-2 rounded-lg text-[10px] font-bold transition-all whitespace-nowrap uppercase tracking-wider ${scraperTransferTarget === 'linkedin' ? 'bg-white text-black shadow-sm' : 'text-slate-500 hover:text-black'}`}
                                                 >
                                                     Find Profiles
                                                 </button>
                                                 <button
                                                     onClick={() => setScraperTransferTarget('verify')}
-                                                    className={`px-4 py-2 rounded-lg text-[10px] font-bold transition-all whitespace-nowrap uppercase tracking-wider ${scraperTransferTarget === 'verify' ? 'bg-andersen-red text-white shadow-lg shadow-andersen-red/20' : 'bg-white text-black hover:bg-gray-100'}`}
+                                                    className={`px-4 py-2 rounded-lg text-[10px] font-bold transition-all whitespace-nowrap uppercase tracking-wider ${scraperTransferTarget === 'verify' ? 'bg-white text-black shadow-sm' : 'text-slate-500 hover:text-black'}`}
                                                 >
                                                     Verify Only
                                                 </button>
@@ -2235,8 +2235,8 @@ const App: React.FC = () => {
                             </div>
                             <div className="lg:col-span-3 flex flex-col items-center">
                                 <div className={`mb-1 p-1.5 rounded-2xl border bg-black/5 border-black/10 flex gap-1 shadow-inner`}>
-                                    <button onClick={() => setInputMode('bulk')} className={`px-8 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${inputMode === 'bulk' ? 'bg-andersen-red text-white shadow-lg shadow-andersen-red/20' : 'bg-white text-black hover:bg-gray-100'}`}><Layers className="w-4 h-4" /> Bulk Upload</button>
-                                    <button onClick={() => setInputMode('single')} className={`px-8 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${inputMode === 'single' ? 'bg-andersen-red text-white shadow-lg shadow-andersen-red/20' : 'bg-white text-black hover:bg-gray-100'}`}><MousePointer2 className="w-4 h-4" /> Single Try</button>
+                                    <button onClick={() => setInputMode('bulk')} className={`px-8 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${inputMode === 'bulk' ? 'bg-white text-black shadow-sm' : 'text-slate-500 hover:text-black'}`}><Layers className="w-4 h-4" /> Bulk Upload</button>
+                                    <button onClick={() => setInputMode('single')} className={`px-8 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${inputMode === 'single' ? 'bg-white text-black shadow-sm' : 'text-slate-500 hover:text-black'}`}><MousePointer2 className="w-4 h-4" /> Single Try</button>
                                 </div>
                                 <AnimatePresence mode="wait">
                                     {inputMode === 'bulk' ? (
