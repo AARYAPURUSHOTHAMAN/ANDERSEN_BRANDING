@@ -208,6 +208,11 @@ const MemoizedRow = React.memo(({
                                     Synced
                                 </div>
                             )}
+                            {row.cachedAt && (
+                                <span className={`text-[8px] font-medium opacity-60 text-slate-500`}>
+                                    Ran on {new Date(row.cachedAt).toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}  {row.cachedType ? `via ${row.cachedType === 'bulk' ? 'Bulk Upload' : 'Single Try'}` : ''}
+                                </span>
+                            )}
                         </div>
                     )}
                 </div>
@@ -220,7 +225,9 @@ const MemoizedRow = React.memo(({
         prevProps.row.email === nextProps.row.email &&
         prevProps.row.linkedinUrl === nextProps.row.linkedinUrl &&
         prevProps.appMode === nextProps.appMode &&
-        prevProps.row.metadata?.cached === nextProps.row.metadata?.cached
+        prevProps.row.metadata?.cached === nextProps.row.metadata?.cached &&
+        prevProps.row.cachedAt === nextProps.row.cachedAt &&
+        prevProps.row.cachedType === nextProps.row.cachedType
     );
 });
 
