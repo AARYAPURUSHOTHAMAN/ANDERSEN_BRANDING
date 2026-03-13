@@ -1498,7 +1498,7 @@ const App: React.FC = () => {
         }));
 
         try {
-            const response = await fetch('https://3539-164-52-216-254.ngrok-free.app/enrich', {
+            const response = await fetch('https://bb23-164-52-216-254.ngrok-free.app/enrich', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1603,7 +1603,7 @@ const App: React.FC = () => {
         }];
 
         try {
-            const response = await fetch('https://3539-164-52-216-254.ngrok-free.app/enrich', {
+            const response = await fetch('https://bb23-164-52-216-254.ngrok-free.app/enrich', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
