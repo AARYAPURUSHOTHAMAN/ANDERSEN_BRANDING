@@ -1,0 +1,16 @@
+{
+  "rewrites": [
+    {
+      "source": "/api-linkfinder/:path*",
+      "destination": "https://api.linkfinderai.com/:path*"
+    },
+    {
+      "source": "/api-getprospect/:path*",
+      "destination": "https://api.getprospect.com/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
