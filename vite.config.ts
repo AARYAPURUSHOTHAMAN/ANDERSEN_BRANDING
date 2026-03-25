@@ -14,6 +14,11 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api-linkfinder/, ''),
         },
+        '/api-getprospect': {
+          target: 'https://api.getprospect.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api-getprospect/, ''),
+        },
       },
     },
     plugins: [react()],
