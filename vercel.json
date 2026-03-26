@@ -13,6 +13,10 @@
       "destination": "https://api.getprospect.com/:path*"
     },
     {
+      "source": "/api-tavily/:path*",
+      "destination": "https://api.tavily.com/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

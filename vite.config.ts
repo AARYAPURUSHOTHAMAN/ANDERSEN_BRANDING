@@ -6,7 +6,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
   return {
     server: {
-      port: 3000,
+      port: 5068,
       host: '0.0.0.0',
       proxy: {
         '/api-linkfinder': {
@@ -18,6 +18,11 @@ export default defineConfig(({ mode }) => {
           target: 'https://api.getprospect.com',
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api-getprospect/, ''),
+        },
+        '/api-tavily': {
+          target: 'https://api.tavily.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api-tavily/, ''),
         },
       },
     },
