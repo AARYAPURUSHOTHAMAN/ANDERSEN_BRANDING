@@ -365,7 +365,7 @@ const App: React.FC = () => {
                 .select('*')
                 .eq('user_id', userId)
                 .order('created_at', { ascending: false })
-                .limit(200);
+                .limit(2000);
 
             if (error) throw error;
 
