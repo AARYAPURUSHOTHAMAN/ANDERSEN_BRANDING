@@ -30,7 +30,7 @@ HTML/Text Content:
 
 export async function fetchEventPage(url: string): Promise<string> {
     try {
-        const apiKey = (import.meta as any).env?.VITE_TAVILY_KEY || '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';
+        const apiKey = (import.meta as any).env?.VITE_TAVILY_KEY;
         const response = await fetch("/api-tavily/extract", {
             method: "POST",
             headers: {

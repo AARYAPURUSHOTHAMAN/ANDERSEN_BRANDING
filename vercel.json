@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api-vertex/:path*",
+      "destination": "/api/vertex"
+    },
+    {
       "source": "/api-linkfinder",
       "destination": "https://api.linkfinderai.com"
     },
