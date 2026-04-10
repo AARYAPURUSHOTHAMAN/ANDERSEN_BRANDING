@@ -35,7 +35,7 @@ app.post('*', async (req, res) => {
     const project = process.env.GCP_PROJECT_ID;
     const credentials = {
       client_email: process.env.GCP_CLIENT_EMAIL,
-      private_key: process.env.GCP_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+      private_key: process.env.GCP_PRIVATE_KEY?.replace(/^"|"$/g, '').replace(/\\n/g, '\n'),
     };
 
     const locations = ['us-central1', 'us-east4', 'europe-west1'];
