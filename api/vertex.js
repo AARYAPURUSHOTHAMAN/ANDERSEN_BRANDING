@@ -29,7 +29,7 @@ const locations = ['us-central1', 'us-east4', 'europe-west1'];
 // Initialize Fallback (Google AI Studio)
 const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
-app.post('/api/vertex/generateContent', async (req, res) => {
+app.post('*', async (req, res) => {
   try {
     const { contents, config } = req.body;
     
