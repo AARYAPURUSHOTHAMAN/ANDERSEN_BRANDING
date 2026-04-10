@@ -24,6 +24,11 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api-tavily/, ''),
         },
+        '/api-vertex': {
+          target: 'http://localhost:3001',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api-vertex/, ''),
+        },
       },
     },
     plugins: [react()],

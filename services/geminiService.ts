@@ -12,31 +12,41 @@ If you are unsure, pick the most likely ones.
 
 export async function suggestMappings(headers: string[]): Promise<{ nameHeader: string; companyHeader: string }> {
   try {
-    const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || (import.meta as any).env?.GEMINI_API_KEY || (process.env as any).API_KEY;
-    const ai = new GoogleGenAI({ apiKey });
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: GET_PROSPECT_PROMPT.replace('{{headers}}', headers.join(', ')),
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            nameHeader: { type: Type.STRING },
-            companyHeader: { type: Type.STRING }
-          },
-          required: ["nameHeader", "companyHeader"]
+    const response = await fetch('/api-vertex/api/vertex/generateContent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          role: 'user',
+          parts: [{ text: GET_PROSPECT_PROMPT.replace('{{headers}}', headers.join(', ')) }]
+        }],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "OBJECT",
+            properties: {
+              nameHeader: { type: "STRING" },
+              companyHeader: { type: "STRING" }
+            },
+            required: ["nameHeader", "companyHeader"]
+          }
         }
-      }
+      })
     });
 
-    const result = JSON.parse(response.text || '{}');
+    if (!response.ok) {
+      throw new Error(`Proxy error: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    const result = JSON.parse(data.text || '{}');
+    
     return {
       nameHeader: result.nameHeader || headers[0],
       companyHeader: result.companyHeader || headers[1] || headers[0]
     };
   } catch (error) {
-    console.error("Gemini mapping failed:", error);
+    console.error("Vertex mapping failed:", error);
     return {
       nameHeader: headers[0],
       companyHeader: headers[1] || headers[0]

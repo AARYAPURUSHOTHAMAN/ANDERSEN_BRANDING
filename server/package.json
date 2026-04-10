@@ -1,0 +1,20 @@
+{
+  "name": "vertex-ai-proxy",
+  "version": "1.0.0",
+  "description": "Proxy for Vertex AI calls",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.9.1",
+    "@google/genai": "^1.49.0",
+    "@google/generative-ai": "^0.24.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "google-auth-library": "^10.6.2"
+  }
+}

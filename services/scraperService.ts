@@ -63,55 +63,51 @@ export async function fetchEventPage(url: string): Promise<string> {
 
 export async function extractSpeakersDetails(html: string): Promise<ScrapedSpeaker[]> {
     try {
-        // We need an API key. We'll use the one from the environment.
-        // In the existing geminiService.ts, it uses `process.env.API_KEY`.
-        // We'll try to retrieve it similarly.
-        // We'll try to retrieve it similarly.
-        const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || (import.meta as any).env?.GEMINI_API_KEY || (process.env as any).API_KEY;
-
-        if (!apiKey) {
-            throw new Error("Gemini API Key is missing");
-        }
-
-        const ai = new GoogleGenAI({ apiKey });
-
-        // Truncate HTML if it's too massive to avoid token limits, though 1.5 Flash has a large context.
-        // Let's safe-guard slightly, maybe 100k chars is enough for most bodies.
         const truncatedHtml = html.length > 200000 ? html.substring(0, 200000) : html;
 
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: EXTRACT_SPEAKERS_PROMPT.replace('{{html_content}}', truncatedHtml),
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        speakers: {
-                            type: Type.ARRAY,
-                            items: {
-                                type: Type.OBJECT,
-                                properties: {
-                                    name: { type: Type.STRING },
-                                    company: { type: Type.STRING },
-                                    role: { type: Type.STRING }
-                                },
-                                required: ["name", "company", "role"]
+        const response = await fetch('/api-vertex/api/vertex/generateContent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{
+                    role: 'user',
+                    parts: [{ text: EXTRACT_SPEAKERS_PROMPT.replace('{{html_content}}', truncatedHtml) }]
+                }],
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "OBJECT",
+                        properties: {
+                            speakers: {
+                                type: "ARRAY",
+                                items: {
+                                    type: "OBJECT",
+                                    properties: {
+                                        name: { type: "STRING" },
+                                        company: { type: "STRING" },
+                                        role: { type: "STRING" }
+                                    },
+                                    required: ["name", "company", "role"]
+                                }
                             }
-                        }
-                    },
-                    required: ["speakers"]
+                        },
+                        required: ["speakers"]
+                    }
                 }
-            }
+            })
         });
 
-        const resultText = typeof (response as any).text === 'function' ? (response as any).text() : (response as any).text;
-        const result = JSON.parse(resultText || '{}');
+        if (!response.ok) {
+            throw new Error(`Proxy error: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        const result = JSON.parse(data.text || '{}');
 
         return result.speakers || [];
 
     } catch (error: any) {
-        console.error("Gemini extraction failed:", error);
+        console.error("Vertex extraction failed:", error);
         return [];
     }
 }
