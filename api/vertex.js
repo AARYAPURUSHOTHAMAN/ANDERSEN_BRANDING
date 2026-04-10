@@ -19,7 +19,7 @@ const checkEnv = (name) => {
     return true;
 };
 
-app.post('*', async (req, res) => {
+app.post('*path', async (req, res) => {
   try {
     console.log('--- Vertex AI Request (Gemini 2.5 Flash) ---');
     checkEnv('GCP_PROJECT_ID');
